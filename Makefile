@@ -130,6 +130,14 @@ endif
 build: install-and-build install-rust-targets
 	yarn build
 
+build-flatpak: install-and-build
+	@echo "==> Building unbundled Tauri binary for Flatpak"
+	@yarn build:web
+    @yarn build:icon
+    @yarn copy:assets:tauri
+    @echo "==> Running tauri build (no bundle)"
+    @SKIP_BINARIES=true IS_CLEAN=true yarn tauri build --no-bundle
+
 clean:
 ifeq ($(OS),Windows_NT)
 	-powershell -Command "Get-ChildItem -Path . -Include node_modules, .next, dist, build, out, .turbo, .yarn -Recurse -Directory | Remove-Item -Recurse -Force"
