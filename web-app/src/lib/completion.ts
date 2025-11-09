@@ -764,7 +764,6 @@ export const postMessageProcessing = async (
           {}
         )
 
-        let streamFinishTime: number
 
         if (followUpCompletion) {
           let followUpText = ''
@@ -784,7 +783,6 @@ export const postMessageProcessing = async (
             }
             if (textContent?.text) textContent.text.value += followUpText
             if (updateStreamingUI) updateStreamingUI({ ...message })
-            streamFinishTime = Date.now()
           } else {
             // Handle streaming response
             const reasoningProcessor = new ReasoningProcessor()
@@ -828,8 +826,7 @@ export const postMessageProcessing = async (
               message.metadata = {
                 ...(message.metadata ?? {}),
                 streamEvents: streamEvents,
-                totalThinkingTime:
-                  currentTotalTime + (Date.now() - followUpStartTime), // Optimistic update
+                totalThinkingTime: currentTotalTime,
               }
 
               if (updateStreamingUI) {
@@ -842,7 +839,6 @@ export const postMessageProcessing = async (
                 updateStreamingUI(uiMessage)
               }
             }
-            streamFinishTime = Date.now()
             if (textContent?.text && updateStreamingUI) {
               // Final UI update after streaming completes
               const uiMessage: ThreadMessage = {
@@ -851,13 +847,6 @@ export const postMessageProcessing = async (
               }
               updateStreamingUI(uiMessage)
             }
-          }
-
-          const followUpTotalTime = streamFinishTime - followUpStartTime
-          currentTotalTime += followUpTotalTime //
-          message.metadata = {
-            ...(message.metadata ?? {}),
-            totalThinkingTime: currentTotalTime,
           }
 
           // Recursively process new tool calls if any
@@ -878,7 +867,7 @@ export const postMessageProcessing = async (
               updateStreamingUI,
               maxToolSteps,
               isProactiveMode,
-              nextStepCount, // Pass the incremented step count
+              nextStepCount // Pass the incremented step count
             )
           }
         }
