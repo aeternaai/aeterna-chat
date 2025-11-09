@@ -752,8 +752,6 @@ export const postMessageProcessing = async (
       try {
         const messagesWithToolResults = builder.getMessages()
 
-        const followUpStartTime = Date.now()
-
         const followUpCompletion = await sendCompletion(
           thread,
           provider,
@@ -763,7 +761,6 @@ export const postMessageProcessing = async (
           true,
           {}
         )
-
 
         if (followUpCompletion) {
           let followUpText = ''
