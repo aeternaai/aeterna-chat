@@ -40,6 +40,8 @@ let mockAppState = {
   loadingModel: false,
   tools: [],
   updateTools: vi.fn(),
+  activeModels: [] as string[],
+  cancelToolCall: vi.fn(),
 }
 
 vi.mock('@/hooks/useAppState', () => ({
@@ -245,6 +247,8 @@ describe('ChatInput', () => {
     mockAppState.abortControllers = {}
     mockAppState.loadingModel = false
     mockAppState.tools = []
+    mockAppState.activeModels = []
+    mockAppState.cancelToolCall = vi.fn()
   })
 
   it('renders chat input textarea', async () => {
@@ -421,6 +425,7 @@ describe('ChatInput', () => {
   it('shows tools dropdown when model supports tools and MCP servers are connected', async () => {
     // Mock connected servers
     mockGetConnectedServers.mockResolvedValue(['server1'])
+    mockAppState.tools = [{ name: 'test-tool' } as any]
 
     await act(async () => {
       renderWithRouter()

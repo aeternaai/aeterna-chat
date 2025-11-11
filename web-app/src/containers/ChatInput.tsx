@@ -4,7 +4,7 @@ import TextareaAutosize from 'react-textarea-autosize'
 import { cn } from '@/lib/utils'
 import { usePrompt } from '@/hooks/usePrompt'
 import { useThreads } from '@/hooks/useThreads'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -106,10 +106,16 @@ const ChatInput = ({
   const [dropdownToolsAvailable, setDropdownToolsAvailable] = useState(false)
   const [tooltipToolsAvailable, setTooltipToolsAvailable] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [connectedServers, setConnectedServers] = useState<string[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const [hasMmproj, setHasMmproj] = useState(false)
-  const [hasActiveModels, setHasActiveModels] = useState(false)
+  const activeModels = useAppState(useShallow((state) => state.activeModels))
+  const hasActiveModels = useMemo(
+    () =>
+      activeModels.length > 0 &&
+      activeModels.some((e) => e === selectedModel?.id),
+    [activeModels, selectedModel?.id]
+  )
+
   const attachmentsEnabled = useAttachments((s) => s.enabled)
   // Determine whether to show the Attach documents button (simple gating)
   const showAttachmentButton =
@@ -119,72 +125,6 @@ const ChatInput = ({
     (a) => a.type === 'document' && a.processing
   )
   const ingestingAny = attachments.some((a) => a.processing)
-
-  // Check for connected MCP servers
-  useEffect(() => {
-    const checkConnectedServers = async () => {
-      try {
-        const servers = await serviceHub.mcp().getConnectedServers()
-        // Only update state if the servers list has actually changed
-        setConnectedServers((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(servers)) {
-            return prev
-          }
-          return servers
-        })
-      } catch (error) {
-        console.error('Failed to get connected servers:', error)
-        setConnectedServers((prev) => {
-          if (prev.length === 0) return prev
-          return []
-        })
-      }
-    }
-
-    checkConnectedServers()
-
-    // Poll for connected servers every 3 seconds
-    const intervalId = setInterval(checkConnectedServers, 3000)
-
-    return () => clearInterval(intervalId)
-  }, [serviceHub])
-
-  // Check for active models
-  useEffect(() => {
-    const checkActiveModels = async () => {
-      try {
-        const activeModels = await serviceHub
-          .models()
-          .getActiveModels('llamacpp')
-        const hasMatchingActiveModel = activeModels.some(
-          (model) => String(model) === selectedModel?.id
-        )
-        const newHasActiveModels =
-          activeModels.length > 0 && hasMatchingActiveModel
-
-        // Only update state if the value has actually changed
-        setHasActiveModels((prev) => {
-          if (prev === newHasActiveModels) {
-            return prev
-          }
-          return newHasActiveModels
-        })
-      } catch (error) {
-        console.error('Failed to get active models:', error)
-        setHasActiveModels((prev) => {
-          if (prev === false) return prev
-          return false
-        })
-      }
-    }
-
-    checkActiveModels()
-
-    // Poll for active models every 3 seconds
-    const intervalId = setInterval(checkActiveModels, 3000)
-
-    return () => clearInterval(intervalId)
-  }, [serviceHub, selectedModel?.id])
 
   // Check for mmproj existence or vision capability when model changes
   useEffect(() => {
@@ -208,7 +148,7 @@ const ChatInput = ({
   }, [selectedModel, selectedModel?.capabilities, selectedProvider, serviceHub])
 
   // Check if there are active MCP servers
-  const hasActiveMCPServers = connectedServers.length > 0 || tools.length > 0
+  const hasActiveMCPServers = tools.length > 0
 
   // Get MCP extension and its custom component
   const extensionManager = ExtensionManager.getInstance()

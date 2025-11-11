@@ -199,6 +199,12 @@ vi.mock('@/hooks/useServiceHub', () => ({
     events: () => ({
       emit: vi.fn(),
     }),
+    window: () => ({
+      openLogsWindow: vi.fn(),
+    }),
+    opener: () => ({
+      revealItemInDir: vi.fn(),
+    }),
   }),
 }))
 

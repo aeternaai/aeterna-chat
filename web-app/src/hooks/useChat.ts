@@ -107,7 +107,11 @@ const processStreamingCompletion = async (
   currentCall: ChatCompletionMessageToolCall | null,
   updateStreamingContent: (content: ThreadMessage | undefined) => void,
   updateTokenSpeed: (message: ThreadMessage, increment?: number) => void,
-  setTokenSpeed: (message: ThreadMessage, tokensPerSecond: number, totalTokens: number) => void,
+  setTokenSpeed: (
+    message: ThreadMessage,
+    tokensPerSecond: number,
+    totalTokens: number
+  ) => void,
   updatePromptProgress: (progress: PromptProgress | undefined) => void,
   timeToFirstToken: number,
   tokenUsageRef: { current: CompletionUsage | undefined },
@@ -285,79 +289,91 @@ export const useChat = () => {
   const setMessages = useMessages((state) => state.setMessages)
   const setModelLoadError = useModelLoad((state) => state.setModelLoadError)
   const router = useRouter()
+  const setActiveModels = useAppState((state) => state.setActiveModels)
 
-  const getCurrentThread = useCallback(async (projectId?: string) => {
-    let currentThread = retrieveThread()
+  const getCurrentThread = useCallback(
+    async (projectId?: string) => {
+      let currentThread = retrieveThread()
 
-    // Check if we're in temporary chat mode
-    const isTemporaryMode = window.location.search.includes(`${TEMPORARY_CHAT_QUERY_ID}=true`)
-
-    // Clear messages for existing temporary thread on reload to ensure fresh start
-    if (isTemporaryMode && currentThread?.id === TEMPORARY_CHAT_ID) {
-      setMessages(TEMPORARY_CHAT_ID, [])
-    }
-
-    if (!currentThread) {
-      // Get prompt directly from store when needed
-      const currentPrompt = usePrompt.getState().prompt
-      const currentAssistant = useAssistant.getState().currentAssistant
-      const assistants = useAssistant.getState().assistants
-      const selectedModel = useModelProvider.getState().selectedModel
-      const selectedProvider = useModelProvider.getState().selectedProvider
-
-      // Get project metadata if projectId is provided
-      let projectMetadata: { id: string; name: string; updated_at: number } | undefined
-      if (projectId) {
-        const project = await serviceHub.projects().getProjectById(projectId)
-        if (project) {
-          projectMetadata = {
-            id: project.id,
-            name: project.name,
-            updated_at: project.updated_at,
-          }
-        }
-      }
-
-      currentThread = await createThread(
-        {
-          id: selectedModel?.id ?? defaultModel(selectedProvider),
-          provider: selectedProvider,
-        },
-        isTemporaryMode ? 'Temporary Chat' : currentPrompt,
-        assistants.find((a) => a.id === currentAssistant?.id) || assistants[0],
-        projectMetadata,
-        isTemporaryMode // pass temporary flag
+      // Check if we're in temporary chat mode
+      const isTemporaryMode = window.location.search.includes(
+        `${TEMPORARY_CHAT_QUERY_ID}=true`
       )
 
-      // Clear messages for temporary chat to ensure fresh start on reload
+      // Clear messages for existing temporary thread on reload to ensure fresh start
       if (isTemporaryMode && currentThread?.id === TEMPORARY_CHAT_ID) {
         setMessages(TEMPORARY_CHAT_ID, [])
       }
 
-      // Set flag for temporary chat navigation
-      if (currentThread.id === TEMPORARY_CHAT_ID) {
-        sessionStorage.setItem('temp-chat-nav', 'true')
-      }
+      if (!currentThread) {
+        // Get prompt directly from store when needed
+        const currentPrompt = usePrompt.getState().prompt
+        const currentAssistant = useAssistant.getState().currentAssistant
+        const assistants = useAssistant.getState().assistants
+        const selectedModel = useModelProvider.getState().selectedModel
+        const selectedProvider = useModelProvider.getState().selectedProvider
 
-      router.navigate({
-        to: route.threadsDetail,
-        params: { threadId: currentThread.id },
-      })
-    }
-    return currentThread
-  }, [createThread, retrieveThread, router, setMessages, serviceHub])
+        // Get project metadata if projectId is provided
+        let projectMetadata:
+          | { id: string; name: string; updated_at: number }
+          | undefined
+        if (projectId) {
+          const project = await serviceHub.projects().getProjectById(projectId)
+          if (project) {
+            projectMetadata = {
+              id: project.id,
+              name: project.name,
+              updated_at: project.updated_at,
+            }
+          }
+        }
+
+        currentThread = await createThread(
+          {
+            id: selectedModel?.id ?? defaultModel(selectedProvider),
+            provider: selectedProvider,
+          },
+          isTemporaryMode ? 'Temporary Chat' : currentPrompt,
+          assistants.find((a) => a.id === currentAssistant?.id) ||
+            assistants[0],
+          projectMetadata,
+          isTemporaryMode // pass temporary flag
+        )
+
+        // Clear messages for temporary chat to ensure fresh start on reload
+        if (isTemporaryMode && currentThread?.id === TEMPORARY_CHAT_ID) {
+          setMessages(TEMPORARY_CHAT_ID, [])
+        }
+
+        // Set flag for temporary chat navigation
+        if (currentThread.id === TEMPORARY_CHAT_ID) {
+          sessionStorage.setItem('temp-chat-nav', 'true')
+        }
+
+        router.navigate({
+          to: route.threadsDetail,
+          params: { threadId: currentThread.id },
+        })
+      }
+      return currentThread
+    },
+    [createThread, retrieveThread, router, setMessages, serviceHub]
+  )
 
   const restartModel = useCallback(
     async (provider: ProviderObject, modelId: string) => {
       await serviceHub.models().stopAllModels()
-      await new Promise((resolve) => setTimeout(resolve, 1000))
       updateLoadingModel(true)
       await serviceHub
         .models()
         .startModel(provider, modelId)
         .catch(console.error)
+      // Refresh active models after starting
       updateLoadingModel(false)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      serviceHub
+        .models()
+        .getActiveModels()
+        .then((models) => setActiveModels(models || []))
     },
     [updateLoadingModel, serviceHub]
   )
@@ -497,7 +513,9 @@ export const useChat = () => {
               updateAttachmentProcessing(img.name, 'processing')
             }
             // Upload image, get id/URL
-            const res = await serviceHub.uploads().ingestImage(activeThread.id, img)
+            const res = await serviceHub
+              .uploads()
+              .ingestImage(activeThread.id, img)
             processedAttachments.push({
               ...img,
               id: res.id,
@@ -513,7 +531,9 @@ export const useChat = () => {
               updateAttachmentProcessing(img.name, 'error')
             }
             const desc = err instanceof Error ? err.message : String(err)
-            toast.error('Failed to ingest image attachment', { description: desc })
+            toast.error('Failed to ingest image attachment', {
+              description: desc,
+            })
             return
           }
         }
@@ -564,7 +584,6 @@ export const useChat = () => {
           useThreads.getState().updateThread(activeThread.id, {
             metadata: { hasDocuments: true },
           })
-
         } catch (err) {
           console.error('Failed to ingest documents:', err)
           const desc = err instanceof Error ? err.message : String(err)
@@ -608,7 +627,7 @@ export const useChat = () => {
 
       // If continuing, start with the previous content
       const accumulatedTextRef = {
-        value: continueFromMessage?.content?.[0]?.text?.value || ''
+        value: continueFromMessage?.content?.[0]?.text?.value || '',
       }
       let currentAssistant: Assistant | undefined | null
 
@@ -617,6 +636,11 @@ export const useChat = () => {
           updateLoadingModel(true)
           await serviceHub.models().startModel(activeProvider, selectedModel.id)
           updateLoadingModel(false)
+          // Refresh active models after starting
+          serviceHub
+            .models()
+            .getActiveModels()
+            .then((models) => setActiveModels(models || []))
         }
         currentAssistant = useAssistant.getState().currentAssistant
         const includeFullContext = useGeneralSetting.getState().includeFullContext
@@ -660,7 +684,9 @@ export const useChat = () => {
           useAttachments.getState().enabled &&
           PlatformFeatures[PlatformFeature.FILE_ATTACHMENTS]
         // Check if documents were attached in the current thread
-        const hasDocuments = useThreads.getState().getThreadById(activeThread.id)?.metadata?.hasDocuments
+        const hasDocuments = useThreads
+          .getState()
+          .getThreadById(activeThread.id)?.metadata?.hasDocuments
         if (hasDocuments && ragFeatureAvailable) {
           try {
             const ragTools = await serviceHub
@@ -683,10 +709,17 @@ export const useChat = () => {
           (selectedModel?.capabilities?.includes('proactive') ?? false)
 
         // Proactive mode: Capture initial screenshot/snapshot before first LLM call
-        if (isProactiveMode && availableTools.length > 0 && !abortController.signal.aborted) {
-          console.log('Proactive mode: Capturing initial screenshots before LLM call')
+        if (
+          isProactiveMode &&
+          availableTools.length > 0 &&
+          !abortController.signal.aborted
+        ) {
+          console.log(
+            'Proactive mode: Capturing initial screenshots before LLM call'
+          )
           try {
-            const initialScreenshots = await captureProactiveScreenshots(abortController)
+            const initialScreenshots =
+              await captureProactiveScreenshots(abortController)
 
             // Add initial screenshots to builder
             for (const screenshot of initialScreenshots) {
@@ -707,6 +740,9 @@ export const useChat = () => {
           !abortController.signal.aborted &&
           activeProvider
         ) {
+          if (!continueFromMessageId) {
+            accumulatedTextRef.value = ''
+          }
           const modelConfig = activeProvider.models.find(
             (m) => m.id === selectedModel?.id
           )
@@ -750,7 +786,10 @@ export const useChat = () => {
             if (isCompletionResponse(completion)) {
               const message = completion.choices[0]?.message
               const newContent = (message?.content as string) || ''
-              if (continueFromMessageId && accumulatedTextRef.value.length > 0) {
+              if (
+                continueFromMessageId &&
+                accumulatedTextRef.value.length > 0
+              ) {
                 accumulatedTextRef.value += newContent
               } else {
                 accumulatedTextRef.value = newContent
@@ -829,6 +868,12 @@ export const useChat = () => {
             await serviceHub
               .models()
               .stopModel(activeThread.model.id, 'llamacpp')
+
+            // Refresh active models after stopping
+            serviceHub
+              .models()
+              .getActiveModels()
+              .then((models) => setActiveModels(models || []))
             throw new Error('No response received from the model')
           }
 
@@ -855,7 +900,11 @@ export const useChat = () => {
           // Normal completion flow (abort is handled after loop exits)
           // Don't add assistant message to builder if continuing - it's already there
           if (!continueFromMessageId) {
-            builder.addAssistantMessage(accumulatedTextRef.value, undefined, toolCalls)
+            builder.addAssistantMessage(
+              accumulatedTextRef.value,
+              undefined,
+              toolCalls
+            )
           }
 
           // Check if proactive mode is enabled for this model
@@ -947,7 +996,8 @@ export const useChat = () => {
         // If aborted, save the partial message even though an error occurred
         // Only save for llamacpp provider - other providers handle streaming differently
         const streamingContent = useAppState.getState().streamingContent
-        const hasPartialContent = accumulatedTextRef.value.length > 0 ||
+        const hasPartialContent =
+          accumulatedTextRef.value.length > 0 ||
           (streamingContent && streamingContent.content?.[0]?.text?.value)
 
         if (
@@ -956,7 +1006,9 @@ export const useChat = () => {
           activeProvider?.provider === 'llamacpp'
         ) {
           // Use streaming content if available, otherwise use accumulatedTextRef
-          const contentText = streamingContent?.content?.[0]?.text?.value || accumulatedTextRef.value
+          const contentText =
+            streamingContent?.content?.[0]?.text?.value ||
+            accumulatedTextRef.value
 
           // If continuing, update the existing message; otherwise add new
           if (continueFromMessageId && continueFromMessage) {
@@ -982,15 +1034,11 @@ export const useChat = () => {
             })
           } else {
             const partialContent = {
-              ...newAssistantThreadContent(
-                activeThread.id,
-                contentText,
-                {
-                  tokenSpeed: useAppState.getState().tokenSpeed,
-                  assistant: currentAssistant,
-                  modelId: selectedModel?.id,
-                }
-              ),
+              ...newAssistantThreadContent(activeThread.id, contentText, {
+                tokenSpeed: useAppState.getState().tokenSpeed,
+                assistant: currentAssistant,
+                modelId: selectedModel?.id,
+              }),
               status: MessageStatus.Stopped,
             }
             addMessage(partialContent)
