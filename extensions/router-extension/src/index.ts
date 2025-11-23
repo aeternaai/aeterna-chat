@@ -10,16 +10,32 @@ import {
 import { HeuristicRouter } from './strategies/HeuristicRouter'
 import { LLMRouter } from './strategies/LLMRouter'
 
+// Dynamic import for Tauri - only available in Tauri context
+let invoke: any
+try {
+  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    invoke = (window as any).__TAURI__.core.invoke
+  }
+} catch (e) {
+  // Not in Tauri context
+}
+
+/**
+ * Router Extension that delegates to Python router service via Tauri commands
+ * Falls back to TypeScript heuristic routing if Python service is unavailable
+ */
 export default class RouterExtension extends ModelRouterExtension {
   private activeStrategy: RouterStrategy
   private availableStrategies: Map<string, RouterStrategy>
   private allowedModels: string[] = []
+  private usePythonRouter: boolean = true
+  private pythonRouterAvailable: boolean = false
 
   constructor(url: string, name: string, productName?: string) {
     super(url, name, productName, true, 'Model Router Extension', '1.0.0')
 
-    // Initialize strategies
-    this.availableStrategies = new Map([
+    // Initialize fallback TypeScript strategies
+    this.availableStrategies = new Map<string, RouterStrategy>([
       ['heuristic', new HeuristicRouter()],
       ['llm-based', new LLMRouter()],
     ])
@@ -43,14 +59,28 @@ export default class RouterExtension extends ModelRouterExtension {
     this.allowedModels = this.parseAllowedModels(allowedModelsStr)
     console.log('[RouterExtension] Allowed models:', this.allowedModels)
 
-    // Register with RouterManager - use window.core.routerManager if available (web/Tauri)
-    // This ensures we use the same singleton instance across the app
+    // Register with RouterManager
     const routerManager = typeof window !== 'undefined' && window.core?.routerManager 
       ? window.core.routerManager 
       : RouterManager.instance()
     
     routerManager.register(this)
     console.log('[RouterExtension] Registered with RouterManager:', routerManager)
+
+    // Check if Python router service is available (Tauri only)
+    if (invoke) {
+      try {
+        await invoke('get_router_health')
+        this.pythonRouterAvailable = true
+        console.log('[RouterExtension] Python router service is available')
+      } catch (error) {
+        console.warn('[RouterExtension] Python router service not available, using fallback:', error)
+        this.pythonRouterAvailable = false
+      }
+    } else {
+      console.log('[RouterExtension] Running in web mode, using TypeScript router')
+      this.pythonRouterAvailable = false
+    }
 
     // Load user preferences for routing strategy
     const savedStrategy = await this.loadStrategyPreference()
@@ -59,6 +89,7 @@ export default class RouterExtension extends ModelRouterExtension {
     }
 
     console.log(`[RouterExtension] Active strategy: ${this.activeStrategy.name}`)
+    console.log(`[RouterExtension] Python router enabled: ${this.usePythonRouter && this.pythonRouterAvailable}`)
   }
 
   async onUnload() {
@@ -91,19 +122,10 @@ export default class RouterExtension extends ModelRouterExtension {
   }
 
   async route(context: RouteContext): Promise<RouteDecision> {
-    console.log(`[RouterExtension] Routing with strategy: ${this.activeStrategy.name}`)
+    console.log(`[RouterExtension] Routing request...`)
 
     // Filter by allowed models
     const filteredModels = this.filterAllowedModels(context.availableModels)
-
-    // Check loaded vs unloaded models
-    const loadedModels = filteredModels.filter(m => m.metadata.isLoaded)
-    const unloadedModels = filteredModels.filter(m => !m.metadata.isLoaded)
-    
-    console.log(`[RouterExtension] Available: ${filteredModels.length} models (${loadedModels.length} loaded, ${unloadedModels.length} unloaded)`)
-    
-    // Note: We now allow routing to unloaded models - they will be loaded automatically
-    // The HeuristicRouter gives strong preference (+50) to loaded models to minimize loading time
 
     const filteredContext = {
       ...context,
@@ -115,11 +137,48 @@ export default class RouterExtension extends ModelRouterExtension {
       throw new Error('No suitable models available for routing. Please check your allowed models configuration.')
     }
 
+    // Try Python router first if available
+    if (this.usePythonRouter && this.pythonRouterAvailable && invoke) {
+      try {
+        const startTime = Date.now()
+        
+        // Call Python router via Tauri command
+        const decision = await invoke('route_request', {
+          request: {
+            messages: filteredContext.messages,
+            threadId: filteredContext.threadId,
+            availableModels: filteredContext.availableModels,
+            activeModels: filteredContext.activeModels,
+            attachments: filteredContext.attachments,
+            preferences: filteredContext.preferences,
+          }
+        }) as RouteDecision
+        
+        const elapsed = Date.now() - startTime
+        
+        const selectedModel = filteredModels.find(m => m.id === decision.modelId)
+        const needsLoading = selectedModel && !selectedModel.metadata.isLoaded
+
+        console.log(
+          `[RouterExtension] Python router: ${decision.modelId} (${elapsed}ms) - ${decision.reasoning}${needsLoading ? ' [will be loaded]' : ' [already loaded]'}`
+        )
+
+        this.logRoutingDecision(decision, elapsed, context)
+        
+        return decision
+      } catch (error) {
+        console.error('[RouterExtension] Python router failed, falling back to TypeScript:', error)
+        // Fall through to TypeScript router
+      }
+    }
+
+    // Fallback to TypeScript router
+    console.log(`[RouterExtension] Using TypeScript router with strategy: ${this.activeStrategy.name}`)
+    
     const startTime = Date.now()
     const decision = await this.activeStrategy.route(filteredContext)
     const elapsed = Date.now() - startTime
 
-    // Check if selected model needs loading
     const selectedModel = filteredModels.find(m => m.id === decision.modelId)
     const needsLoading = selectedModel && !selectedModel.metadata.isLoaded
 
@@ -127,7 +186,6 @@ export default class RouterExtension extends ModelRouterExtension {
       `[RouterExtension] Routed to ${decision.modelId} (${elapsed}ms) - ${decision.reasoning}${needsLoading ? ' [will be loaded]' : ' [already loaded]'}`
     )
 
-    // Log decision for analytics
     this.logRoutingDecision(decision, elapsed, context)
 
     return decision

@@ -20,7 +20,10 @@ use tauri_plugin_store::Store;
 use crate::core::mcp::helpers::add_server_config;
 
 use super::{
-    extensions::commands::get_jan_extensions_path, mcp::helpers::run_mcp_commands, state::AppState,
+    extensions::commands::get_jan_extensions_path, 
+    mcp::helpers::run_mcp_commands, 
+    router::commands::start_router,
+    state::AppState,
 };
 
 pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> Result<(), String> {
@@ -250,6 +253,18 @@ pub fn setup_mcp<R: Runtime>(app: &App<R>) {
         app_handle
             .emit("mcp-update", "MCP servers updated")
             .unwrap();
+    });
+}
+
+pub fn setup_router<R: Runtime>(app: &App<R>) {
+    let app_handle = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        log::info!("Starting router service...");
+        if let Err(e) = start_router(app_handle.clone(), app_handle.state::<AppState>()).await {
+            log::error!("Failed to start router service: {}", e);
+        } else {
+            log::info!("Router service started successfully");
+        }
     });
 }
 
