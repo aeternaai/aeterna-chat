@@ -74,6 +74,12 @@ const SettingsMenu = () => {
       isEnabled: true,
     },
     {
+      title: 'common:router',
+      route: route.settings.router,
+      hasSubMenu: false,
+      isEnabled: true,
+    },
+    {
       title: 'common:attachments',
       route: route.settings.attachments,
       hasSubMenu: false,
@@ -96,6 +102,12 @@ const SettingsMenu = () => {
       route: route.settings.model_providers,
       hasSubMenu: activeProviders.length > 0,
       isEnabled: PlatformFeatures[PlatformFeature.MODEL_PROVIDER_SETTINGS],
+    },
+    {
+      title: 'common:assistants',
+      route: route.settings.assistant,
+      hasSubMenu: false,
+      isEnabled: PlatformFeatures[PlatformFeature.ASSISTANTS],
     },
     {
       title: 'common:keyboardShortcuts',

@@ -76,7 +76,8 @@ const inferCapabilities = (model: Model): string[] => {
 
 // Helper to build available models array from providers
 const buildAvailableModels = (
-  providers: ModelProvider[]
+  providers: ModelProvider[],
+  activeModelIds: string[] = []
 ): AvailableModel[] => {
   const availableModels: AvailableModel[] = []
 
@@ -98,7 +99,7 @@ const buildAvailableModels = (
             typeof model.settings?.ctx_len === 'number'
               ? model.settings.ctx_len
               : 4096,
-          isLoaded: false, // Will be updated by checking active models
+          isLoaded: activeModelIds.includes(model.id),
         },
       })
     }
@@ -106,6 +107,7 @@ const buildAvailableModels = (
 
   return availableModels
 }
+import { useMCPServers } from '@/hooks/useMCPServers'
 
 // Helper to create thread content with consistent structure
 const createThreadContent = (
@@ -334,6 +336,7 @@ export const useChat = () => {
   const getDisabledToolsForThread = useToolAvailable(
     (state) => state.getDisabledToolsForThread
   )
+  const mcpSettings = useMCPServers((state) => state.settings)
 
   const getProviderByName = useModelProvider((state) => state.getProviderByName)
 
@@ -539,12 +542,29 @@ export const useChat = () => {
       ) => void,
       continueFromMessageId?: string
     ) => {
+      console.log('[useChat] sendMessage called')
       const activeThread = await getCurrentThread(projectId)
       const selectedProvider = useModelProvider.getState().selectedProvider
       let activeProvider = getProviderByName(selectedProvider)
+      const isRoutingEnabled = useAppState.getState().routingEnabled
+
+      console.log('[useChat] Initial state:', { 
+        hasActiveThread: !!activeThread, 
+        selectedProvider,
+        hasActiveProvider: !!activeProvider,
+        routingEnabled: isRoutingEnabled
+      })
 
       resetTokenSpeed()
-      if (!activeThread || !activeProvider) return
+      // Allow proceeding if either we have an active provider OR routing is enabled
+      if (!activeThread) {
+        console.error('[useChat] No active thread')
+        return
+      }
+      if (!activeProvider && !isRoutingEnabled) {
+        console.error('[useChat] No active provider and routing is disabled')
+        return
+      }
 
       // Separate images and documents
       const fileAttachmentsFeatureEnabled =
@@ -697,9 +717,18 @@ export const useChat = () => {
           const router = RouterManager.instance().get()
           if (router) {
             const providers = useModelProvider.getState().providers
-            const availableModels = buildAvailableModels(providers)
+            const activeModelIds = useAppState.getState().activeModels
+            const availableModels = buildAvailableModels(providers, activeModelIds)
             
             console.log('[Router] Routing query with', availableModels.length, 'available models')
+            console.log('[Router] Active models:', activeModelIds)
+            
+            // Check if there are any available models
+            if (availableModels.length === 0) {
+              console.error('[Router] No available models found for routing')
+              toast.error('No models available for routing. Please configure at least one model.')
+              return
+            }
             
             // Build messages for routing context
             const routingMessages: ChatCompletionMessage[] = [
@@ -716,7 +745,7 @@ export const useChat = () => {
               messages: routingMessages,
               threadId: activeThread.id,
               availableModels,
-              activeModels: [], // TODO: Get actual active models
+              activeModels: activeModelIds,
               attachments: {
                 images: images.length,
                 documents: documents.length,
@@ -740,17 +769,45 @@ export const useChat = () => {
                 targetProvider = routedModel.provider
                 activeProvider = getProviderByName(targetProvider)
                 
+                // CRITICAL: Update the thread's model to match the routed model
+                // This ensures sendCompletion() uses the correct model
+                activeThread.model = {
+                  id: selectedModel.id,
+                  provider: targetProvider,
+                }
+                
+                // Check if model is already loaded
+                const isModelLoaded = activeModelIds.includes(selectedModel.id)
+                
                 console.log('[Router] Routed to model:', selectedModel.id, 'provider:', targetProvider)
+                console.log('[Router] Updated thread.model to:', activeThread.model?.id)
                 console.log('[Router] Confidence:', routeDecision.confidence, 'Reasoning:', routeDecision.reasoning)
+                console.log('[Router] Model loaded:', isModelLoaded)
+                
+                if (!isModelLoaded) {
+                  toast.success(`Auto Router selected ${selectedModel.id}. Loading model...`)
+                } else {
+                  toast.success(`Auto Router selected ${selectedModel.id}`)
+                }
               } else {
-                console.warn('[Router] Could not find routed model, using selected model')
+                console.warn('[Router] Could not find routed model')
+                toast.error('Router could not find the selected model. Please try again.')
+                return
               }
+            } else {
+              console.error('[Router] No routing decision returned')
+              toast.error('Router failed to select a model. Please try again.')
+              return
             }
           } else {
             console.warn('[Router] Router enabled but no router extension loaded')
+            toast.error('Auto Router is not available. Please select a model manually.')
+            return
           }
         } catch (error) {
-          console.error('[Router] Error during routing, falling back to selected model:', error)
+          console.error('[Router] Error during routing:', error)
+          toast.error('Auto Router error: ' + (error instanceof Error ? error.message : 'Unknown error'))
+          return
         }
       }
 
@@ -763,7 +820,17 @@ export const useChat = () => {
       try {
         if (selectedModel?.id) {
           updateLoadingModel(true)
-          await serviceHub.models().startModel(activeProvider!, selectedModel.id)
+          try {
+            await serviceHub.models().startModel(activeProvider!, selectedModel.id)
+            console.log('[Router] Model started successfully:', selectedModel.id)
+          } catch (modelLoadError) {
+            console.error('[Router] Failed to start model:', selectedModel.id, modelLoadError)
+            toast.error(`Failed to load model: ${selectedModel.id}`, {
+              description: modelLoadError instanceof Error ? modelLoadError.message : String(modelLoadError)
+            })
+            updateLoadingModel(false)
+            return
+          }
           updateLoadingModel(false)
           // Refresh active models after starting
           serviceHub
@@ -841,11 +908,11 @@ export const useChat = () => {
           }
         }
 
-        // Check if proactive mode is enabled
-        const isProactiveMode =
-          (selectedModel?.capabilities?.includes('tools') ?? false) &&
+        // Check if proactive mode is enabled in MCP settings and model has required capabilities
+        const hasRequiredCapabilities =
           (selectedModel?.capabilities?.includes('vision') ?? false) &&
-          (selectedModel?.capabilities?.includes('proactive') ?? false)
+          (selectedModel?.capabilities?.includes('tools') ?? false)
+        const isProactiveMode = mcpSettings.proactiveMode && hasRequiredCapabilities
 
         // Proactive mode: Capture initial screenshot/snapshot before first LLM call
         if (
@@ -1046,11 +1113,12 @@ export const useChat = () => {
             )
           }
 
-          // Check if proactive mode is enabled for this model
-          const isProactiveMode =
-            (selectedModel?.capabilities?.includes('tools') ?? false) &&
+          // Check if proactive mode is enabled in MCP settings and model has required capabilities
+          const hasRequiredCapabilitiesForPostProcessing =
             (selectedModel?.capabilities?.includes('vision') ?? false) &&
-            (selectedModel?.capabilities?.includes('proactive') ?? false)
+            (selectedModel?.capabilities?.includes('tools') ?? false)
+          const isProactiveModeForPostProcessing =
+            mcpSettings.proactiveMode && hasRequiredCapabilitiesForPostProcessing
 
           const updatedMessage = await postMessageProcessing(
             toolCalls,
@@ -1060,7 +1128,7 @@ export const useChat = () => {
             useToolApproval.getState().approvedTools,
             allowAllMCPPermissions ? undefined : showApprovalModal,
             allowAllMCPPermissions,
-            isProactiveMode
+            isProactiveModeForPostProcessing
           )
           finalizeMessage(
             updatedMessage ?? finalContent,
@@ -1220,6 +1288,8 @@ export const useChat = () => {
       setModelLoadError,
       serviceHub,
       setTokenSpeed,
+      mcpSettings.proactiveMode,
+      setActiveModels,
     ]
   )
 

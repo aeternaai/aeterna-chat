@@ -13,12 +13,12 @@
 import { Route as rootRoute } from './routes/__root'
 import { Route as SystemMonitorImport } from './routes/system-monitor'
 import { Route as LogsImport } from './routes/logs'
-import { Route as AssistantImport } from './routes/assistant'
 import { Route as IndexImport } from './routes/index'
 import { Route as ProjectIndexImport } from './routes/project/index'
 import { Route as HubIndexImport } from './routes/hub/index'
 import { Route as ThreadsThreadIdImport } from './routes/threads/$threadId'
 import { Route as SettingsShortcutsImport } from './routes/settings/shortcuts'
+import { Route as SettingsRouterImport } from './routes/settings/router'
 import { Route as SettingsPrivacyImport } from './routes/settings/privacy'
 import { Route as SettingsMcpServersImport } from './routes/settings/mcp-servers'
 import { Route as SettingsLocalApiServerImport } from './routes/settings/local-api-server'
@@ -28,6 +28,7 @@ import { Route as SettingsHardwareImport } from './routes/settings/hardware'
 import { Route as SettingsGeneralImport } from './routes/settings/general'
 import { Route as SettingsExtensionsImport } from './routes/settings/extensions'
 import { Route as SettingsAttachmentsImport } from './routes/settings/attachments'
+import { Route as SettingsAssistantImport } from './routes/settings/assistant'
 import { Route as ProjectProjectIdImport } from './routes/project/$projectId'
 import { Route as LocalApiServerLogsImport } from './routes/local-api-server/logs'
 import { Route as HubModelIdImport } from './routes/hub/$modelId'
@@ -46,12 +47,6 @@ const SystemMonitorRoute = SystemMonitorImport.update({
 const LogsRoute = LogsImport.update({
   id: '/logs',
   path: '/logs',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const AssistantRoute = AssistantImport.update({
-  id: '/assistant',
-  path: '/assistant',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -82,6 +77,12 @@ const ThreadsThreadIdRoute = ThreadsThreadIdImport.update({
 const SettingsShortcutsRoute = SettingsShortcutsImport.update({
   id: '/settings/shortcuts',
   path: '/settings/shortcuts',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const SettingsRouterRoute = SettingsRouterImport.update({
+  id: '/settings/router',
+  path: '/settings/router',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -139,6 +140,12 @@ const SettingsAttachmentsRoute = SettingsAttachmentsImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
+const SettingsAssistantRoute = SettingsAssistantImport.update({
+  id: '/settings/assistant',
+  path: '/settings/assistant',
+  getParentRoute: () => rootRoute,
+} as any)
+
 const ProjectProjectIdRoute = ProjectProjectIdImport.update({
   id: '/project/$projectId',
   path: '/project/$projectId',
@@ -187,13 +194,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexImport
       parentRoute: typeof rootRoute
     }
-    '/assistant': {
-      id: '/assistant'
-      path: '/assistant'
-      fullPath: '/assistant'
-      preLoaderRoute: typeof AssistantImport
-      parentRoute: typeof rootRoute
-    }
     '/logs': {
       id: '/logs'
       path: '/logs'
@@ -227,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: '/project/$projectId'
       fullPath: '/project/$projectId'
       preLoaderRoute: typeof ProjectProjectIdImport
+      parentRoute: typeof rootRoute
+    }
+    '/settings/assistant': {
+      id: '/settings/assistant'
+      path: '/settings/assistant'
+      fullPath: '/settings/assistant'
+      preLoaderRoute: typeof SettingsAssistantImport
       parentRoute: typeof rootRoute
     }
     '/settings/attachments': {
@@ -292,6 +299,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsPrivacyImport
       parentRoute: typeof rootRoute
     }
+    '/settings/router': {
+      id: '/settings/router'
+      path: '/settings/router'
+      fullPath: '/settings/router'
+      preLoaderRoute: typeof SettingsRouterImport
+      parentRoute: typeof rootRoute
+    }
     '/settings/shortcuts': {
       id: '/settings/shortcuts'
       path: '/settings/shortcuts'
@@ -348,12 +362,12 @@ declare module '@tanstack/react-router' {
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/assistant': typeof AssistantRoute
   '/logs': typeof LogsRoute
   '/system-monitor': typeof SystemMonitorRoute
   '/hub/$modelId': typeof HubModelIdRoute
   '/local-api-server/logs': typeof LocalApiServerLogsRoute
   '/project/$projectId': typeof ProjectProjectIdRoute
+  '/settings/assistant': typeof SettingsAssistantRoute
   '/settings/attachments': typeof SettingsAttachmentsRoute
   '/settings/extensions': typeof SettingsExtensionsRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -363,6 +377,7 @@ export interface FileRoutesByFullPath {
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
+  '/settings/router': typeof SettingsRouterRoute
   '/settings/shortcuts': typeof SettingsShortcutsRoute
   '/threads/$threadId': typeof ThreadsThreadIdRoute
   '/hub': typeof HubIndexRoute
@@ -374,12 +389,12 @@ export interface FileRoutesByFullPath {
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/assistant': typeof AssistantRoute
   '/logs': typeof LogsRoute
   '/system-monitor': typeof SystemMonitorRoute
   '/hub/$modelId': typeof HubModelIdRoute
   '/local-api-server/logs': typeof LocalApiServerLogsRoute
   '/project/$projectId': typeof ProjectProjectIdRoute
+  '/settings/assistant': typeof SettingsAssistantRoute
   '/settings/attachments': typeof SettingsAttachmentsRoute
   '/settings/extensions': typeof SettingsExtensionsRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -389,6 +404,7 @@ export interface FileRoutesByTo {
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
+  '/settings/router': typeof SettingsRouterRoute
   '/settings/shortcuts': typeof SettingsShortcutsRoute
   '/threads/$threadId': typeof ThreadsThreadIdRoute
   '/hub': typeof HubIndexRoute
@@ -401,12 +417,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
-  '/assistant': typeof AssistantRoute
   '/logs': typeof LogsRoute
   '/system-monitor': typeof SystemMonitorRoute
   '/hub/$modelId': typeof HubModelIdRoute
   '/local-api-server/logs': typeof LocalApiServerLogsRoute
   '/project/$projectId': typeof ProjectProjectIdRoute
+  '/settings/assistant': typeof SettingsAssistantRoute
   '/settings/attachments': typeof SettingsAttachmentsRoute
   '/settings/extensions': typeof SettingsExtensionsRoute
   '/settings/general': typeof SettingsGeneralRoute
@@ -416,6 +432,7 @@ export interface FileRoutesById {
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
+  '/settings/router': typeof SettingsRouterRoute
   '/settings/shortcuts': typeof SettingsShortcutsRoute
   '/threads/$threadId': typeof ThreadsThreadIdRoute
   '/hub/': typeof HubIndexRoute
@@ -429,12 +446,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/assistant'
     | '/logs'
     | '/system-monitor'
     | '/hub/$modelId'
     | '/local-api-server/logs'
     | '/project/$projectId'
+    | '/settings/assistant'
     | '/settings/attachments'
     | '/settings/extensions'
     | '/settings/general'
@@ -444,6 +461,7 @@ export interface FileRouteTypes {
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
     | '/settings/privacy'
+    | '/settings/router'
     | '/settings/shortcuts'
     | '/threads/$threadId'
     | '/hub'
@@ -454,12 +472,12 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/assistant'
     | '/logs'
     | '/system-monitor'
     | '/hub/$modelId'
     | '/local-api-server/logs'
     | '/project/$projectId'
+    | '/settings/assistant'
     | '/settings/attachments'
     | '/settings/extensions'
     | '/settings/general'
@@ -469,6 +487,7 @@ export interface FileRouteTypes {
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
     | '/settings/privacy'
+    | '/settings/router'
     | '/settings/shortcuts'
     | '/threads/$threadId'
     | '/hub'
@@ -479,12 +498,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/assistant'
     | '/logs'
     | '/system-monitor'
     | '/hub/$modelId'
     | '/local-api-server/logs'
     | '/project/$projectId'
+    | '/settings/assistant'
     | '/settings/attachments'
     | '/settings/extensions'
     | '/settings/general'
@@ -494,6 +513,7 @@ export interface FileRouteTypes {
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
     | '/settings/privacy'
+    | '/settings/router'
     | '/settings/shortcuts'
     | '/threads/$threadId'
     | '/hub/'
@@ -506,12 +526,12 @@ export interface FileRouteTypes {
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AssistantRoute: typeof AssistantRoute
   LogsRoute: typeof LogsRoute
   SystemMonitorRoute: typeof SystemMonitorRoute
   HubModelIdRoute: typeof HubModelIdRoute
   LocalApiServerLogsRoute: typeof LocalApiServerLogsRoute
   ProjectProjectIdRoute: typeof ProjectProjectIdRoute
+  SettingsAssistantRoute: typeof SettingsAssistantRoute
   SettingsAttachmentsRoute: typeof SettingsAttachmentsRoute
   SettingsExtensionsRoute: typeof SettingsExtensionsRoute
   SettingsGeneralRoute: typeof SettingsGeneralRoute
@@ -521,6 +541,7 @@ export interface RootRouteChildren {
   SettingsLocalApiServerRoute: typeof SettingsLocalApiServerRoute
   SettingsMcpServersRoute: typeof SettingsMcpServersRoute
   SettingsPrivacyRoute: typeof SettingsPrivacyRoute
+  SettingsRouterRoute: typeof SettingsRouterRoute
   SettingsShortcutsRoute: typeof SettingsShortcutsRoute
   ThreadsThreadIdRoute: typeof ThreadsThreadIdRoute
   HubIndexRoute: typeof HubIndexRoute
@@ -532,12 +553,12 @@ export interface RootRouteChildren {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AssistantRoute: AssistantRoute,
   LogsRoute: LogsRoute,
   SystemMonitorRoute: SystemMonitorRoute,
   HubModelIdRoute: HubModelIdRoute,
   LocalApiServerLogsRoute: LocalApiServerLogsRoute,
   ProjectProjectIdRoute: ProjectProjectIdRoute,
+  SettingsAssistantRoute: SettingsAssistantRoute,
   SettingsAttachmentsRoute: SettingsAttachmentsRoute,
   SettingsExtensionsRoute: SettingsExtensionsRoute,
   SettingsGeneralRoute: SettingsGeneralRoute,
@@ -547,6 +568,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsLocalApiServerRoute: SettingsLocalApiServerRoute,
   SettingsMcpServersRoute: SettingsMcpServersRoute,
   SettingsPrivacyRoute: SettingsPrivacyRoute,
+  SettingsRouterRoute: SettingsRouterRoute,
   SettingsShortcutsRoute: SettingsShortcutsRoute,
   ThreadsThreadIdRoute: ThreadsThreadIdRoute,
   HubIndexRoute: HubIndexRoute,
@@ -567,12 +589,12 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
-        "/assistant",
         "/logs",
         "/system-monitor",
         "/hub/$modelId",
         "/local-api-server/logs",
         "/project/$projectId",
+        "/settings/assistant",
         "/settings/attachments",
         "/settings/extensions",
         "/settings/general",
@@ -582,6 +604,7 @@ export const routeTree = rootRoute
         "/settings/local-api-server",
         "/settings/mcp-servers",
         "/settings/privacy",
+        "/settings/router",
         "/settings/shortcuts",
         "/threads/$threadId",
         "/hub/",
@@ -593,9 +616,6 @@ export const routeTree = rootRoute
     },
     "/": {
       "filePath": "index.tsx"
-    },
-    "/assistant": {
-      "filePath": "assistant.tsx"
     },
     "/logs": {
       "filePath": "logs.tsx"
@@ -611,6 +631,9 @@ export const routeTree = rootRoute
     },
     "/project/$projectId": {
       "filePath": "project/$projectId.tsx"
+    },
+    "/settings/assistant": {
+      "filePath": "settings/assistant.tsx"
     },
     "/settings/attachments": {
       "filePath": "settings/attachments.tsx"
@@ -638,6 +661,9 @@ export const routeTree = rootRoute
     },
     "/settings/privacy": {
       "filePath": "settings/privacy.tsx"
+    },
+    "/settings/router": {
+      "filePath": "settings/router.tsx"
     },
     "/settings/shortcuts": {
       "filePath": "settings/shortcuts.tsx"
