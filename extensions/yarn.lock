@@ -481,6 +481,7 @@ __metadata:
   resolution: "@janhq/router-extension@workspace:router-extension"
   dependencies:
     "@janhq/core": ../../core/package.tgz
+    "@tauri-apps/api": "npm:2.8.0"
     cpx: "npm:1.5.0"
     rimraf: "npm:6.0.1"
     rolldown: "npm:1.0.0-beta.1"

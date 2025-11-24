@@ -130,7 +130,7 @@ class HeuristicRouter(RouterStrategy):
         else:
             # Prefer smaller models for simple queries (faster)
             params = self._extract_param_count(model.metadata.parameter_count)
-            if params <= 5:
+            if params <= 7:
                 score += 50
             elif params <= 15:
                 score += 10
@@ -142,15 +142,15 @@ class HeuristicRouter(RouterStrategy):
         
         # 4. Already loaded bonus (CRITICAL - avoid model switching)
         if model.metadata.is_loaded:
-            score += 20
+            score += 10
         
         # Also check activeModels array for backwards compatibility
         if model.id in active_models:
-            score += 20
+            score += 10
         
         # 5. Penalize models not loaded (if preference set)
         if request.preferences and request.preferences.prefer_loaded and not model.metadata.is_loaded:
-            score -= 30
+            score -= 10
         
         return max(0.0, min(100.0, score))
     

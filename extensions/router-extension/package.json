@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@janhq/core": "../../core/package.tgz",
+    "@tauri-apps/api": "2.8.0",
     "ts-loader": "^9.5.0"
   },
   "files": [

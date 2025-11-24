@@ -12,25 +12,35 @@ pub async fn start_router<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    log::info!("Starting router service...");
+    log::info!("📋 Router service start requested");
 
     // Check if already running
     {
         let router_process = state.router_process.lock().await;
         if router_process.is_some() {
-            log::warn!("Router service is already running");
+            log::warn!("⚠️  Router service is already running, skipping start");
             return Ok(());
         }
     }
 
     // Get config (use default for now, can be customized via settings)
     let config = RouterConfig::default();
+    log::info!("📋 Router config: host={}, port={}", config.host, config.port);
 
     // Start the service
-    let child = start_router_service(&app, &config).await?;
+    log::info!("🚀 Starting router service process...");
+    let child = start_router_service(&app, &config).await.map_err(|e| {
+        let error_msg = format!("Failed to start router service: {}", e);
+        log::error!("❌ {}", error_msg);
+        error_msg
+    })?;
 
     // Wait for service to be ready
-    wait_for_router_ready(&config, 20).await?;
+    wait_for_router_ready(&config, 20).await.map_err(|e| {
+        let error_msg = format!("Router service did not become ready: {}", e);
+        log::error!("❌ {}", error_msg);
+        error_msg
+    })?;
 
     // Store the process handle
     {
@@ -44,7 +54,7 @@ pub async fn start_router<R: Runtime>(
         *router_config = config;
     }
 
-    log::info!("Router service started and ready");
+    log::info!("✅ Router service is fully operational");
     Ok(())
 }
 

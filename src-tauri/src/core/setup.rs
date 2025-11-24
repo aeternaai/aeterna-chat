@@ -259,11 +259,24 @@ pub fn setup_mcp<R: Runtime>(app: &App<R>) {
 pub fn setup_router<R: Runtime>(app: &App<R>) {
     let app_handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
-        log::info!("Starting router service...");
-        if let Err(e) = start_router(app_handle.clone(), app_handle.state::<AppState>()).await {
-            log::error!("Failed to start router service: {}", e);
-        } else {
-            log::info!("Router service started successfully");
+        log::info!("🐍 ============================================");
+        log::info!("🐍 Initializing Python Router Service");
+        log::info!("🐍 ============================================");
+        
+        match start_router(app_handle.clone(), app_handle.state::<AppState>()).await {
+            Ok(_) => {
+                log::info!("🐍 ============================================");
+                log::info!("🐍 ✅ Router Service Started Successfully!");
+                log::info!("🐍 ============================================");
+            }
+            Err(e) => {
+                log::error!("🐍 ============================================");
+                log::error!("🐍 ❌ Router Service Failed to Start");
+                log::error!("🐍 ============================================");
+                log::error!("🐍 Error: {}", e);
+                log::error!("🐍 The application will use TypeScript fallback routing");
+                log::error!("🐍 ============================================");
+            }
         }
     });
 }

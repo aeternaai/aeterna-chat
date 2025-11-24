@@ -7,17 +7,23 @@ import {
   fs,
   joinPath,
 } from '@janhq/core'
+import { invoke } from '@tauri-apps/api/core'
 import { HeuristicRouter } from './strategies/HeuristicRouter'
 import { LLMRouter } from './strategies/LLMRouter'
 
-// Dynamic import for Tauri - only available in Tauri context
-let invoke: any
-try {
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
-    invoke = (window as any).__TAURI__.core.invoke
+/**
+ * Check if running in Tauri context by attempting to use invoke
+ */
+async function isTauriContext(): Promise<boolean> {
+  try {
+    // If invoke exists and works, we're in Tauri
+    await invoke('get_router_health')
+    return true
+  } catch (error) {
+    // Either not in Tauri, or Python router not ready
+    // This is expected in web mode or during startup
+    return false
   }
-} catch (e) {
-  // Not in Tauri context
 }
 
 /**
@@ -68,19 +74,9 @@ export default class RouterExtension extends ModelRouterExtension {
     console.log('[RouterExtension] Registered with RouterManager:', routerManager)
 
     // Check if Python router service is available (Tauri only)
-    if (invoke) {
-      try {
-        await invoke('get_router_health')
-        this.pythonRouterAvailable = true
-        console.log('[RouterExtension] Python router service is available')
-      } catch (error) {
-        console.warn('[RouterExtension] Python router service not available, using fallback:', error)
-        this.pythonRouterAvailable = false
-      }
-    } else {
-      console.log('[RouterExtension] Running in web mode, using TypeScript router')
-      this.pythonRouterAvailable = false
-    }
+    // Use retry logic to allow time for service startup during app initialization
+    console.log('[RouterExtension] 🚀 Checking for Python router...')
+    this.pythonRouterAvailable = await this.checkPythonRouterWithRetry(5, 1000)
 
     // Load user preferences for routing strategy
     const savedStrategy = await this.loadStrategyPreference()
@@ -89,7 +85,15 @@ export default class RouterExtension extends ModelRouterExtension {
     }
 
     console.log(`[RouterExtension] Active strategy: ${this.activeStrategy.name}`)
-    console.log(`[RouterExtension] Python router enabled: ${this.usePythonRouter && this.pythonRouterAvailable}`)
+    
+    // Clear debug output showing which router will be used
+    if (this.usePythonRouter && this.pythonRouterAvailable) {
+      console.log(`✅ [RouterExtension] ROUTER MODE: PYTHON (Python service available on port 8765)`)
+    } else if (this.usePythonRouter && !this.pythonRouterAvailable) {
+      console.log(`⚠️  [RouterExtension] ROUTER MODE: TYPESCRIPT FALLBACK (Python service not available)`)
+    } else {
+      console.log(`📜 [RouterExtension] ROUTER MODE: TYPESCRIPT (Python router disabled)`)
+    }
   }
 
   async onUnload() {
@@ -138,8 +142,9 @@ export default class RouterExtension extends ModelRouterExtension {
     }
 
     // Try Python router first if available
-    if (this.usePythonRouter && this.pythonRouterAvailable && invoke) {
+    if (this.usePythonRouter && this.pythonRouterAvailable) {
       try {
+        console.log(`🐍 [RouterExtension] Using PYTHON router service`)
         const startTime = Date.now()
         
         // Call Python router via Tauri command
@@ -173,7 +178,7 @@ export default class RouterExtension extends ModelRouterExtension {
     }
 
     // Fallback to TypeScript router
-    console.log(`[RouterExtension] Using TypeScript router with strategy: ${this.activeStrategy.name}`)
+    console.log(`📜 [RouterExtension] Using TYPESCRIPT router (strategy: ${this.activeStrategy.name})`)
     
     const startTime = Date.now()
     const decision = await this.activeStrategy.route(filteredContext)
@@ -231,6 +236,46 @@ export default class RouterExtension extends ModelRouterExtension {
 
     // For now, just console log
     console.debug('[RouterExtension] Decision:', logEntry)
+  }
+
+  /**
+   * Check if Python router is available with retry logic
+   * Allows time for Python service to start during app initialization
+   */
+  private async checkPythonRouterWithRetry(
+    maxAttempts: number,
+    delayMs: number
+  ): Promise<boolean> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await invoke('get_router_health')
+        if (attempt > 1) {
+          console.log(
+            `[RouterExtension] 🎯 Python router ready (attempt ${attempt}/${maxAttempts})`
+          )
+        }
+        return true
+      } catch (error) {
+        if (attempt === maxAttempts) {
+          console.warn(
+            `[RouterExtension] ⏱️  Python router not available after ${maxAttempts} attempts (${maxAttempts * delayMs}ms total)`,
+            error
+          )
+          return false
+        }
+        
+        // Log retry attempts (but not the first one to reduce noise)
+        if (attempt > 1) {
+          console.log(
+            `[RouterExtension] ⏳ Waiting for Python router... (attempt ${attempt}/${maxAttempts})`
+          )
+        }
+        
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
+      }
+    }
+    return false
   }
 
   private getMessageContent(message: any): string {
