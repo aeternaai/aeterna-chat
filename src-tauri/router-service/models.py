@@ -79,3 +79,17 @@ class StrategyInfo(BaseModel):
     """Information about a routing strategy"""
     name: str
     description: str
+
+
+class LLMConfig(BaseModel):
+    """Configuration payload for the LLM router strategy"""
+
+    api_key: Optional[str] = Field(None, alias="apiKey")
+    base_url: Optional[str] = Field(None, alias="baseUrl")
+    model: Optional[str] = None
+    temperature: Optional[float] = None
+    timeout: Optional[float] = None
+    max_tokens: Optional[int] = Field(None, alias="maxTokens")
+
+    class Config:
+        populate_by_name = True

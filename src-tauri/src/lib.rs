@@ -107,6 +107,7 @@ pub fn run() {
             core::router::commands::get_router_health,
             core::router::commands::list_router_strategies,
             core::router::commands::set_router_strategy,
+            core::router::commands::configure_router_llm,
             // Threads
             core::threads::commands::list_threads,
             core::threads::commands::create_thread,

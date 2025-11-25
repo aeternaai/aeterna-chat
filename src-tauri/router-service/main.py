@@ -15,6 +15,7 @@ from models import (
     RouteResponse,
     HealthResponse,
     StrategyInfo,
+    LLMConfig,
 )
 from router import RouterService
 
@@ -111,6 +112,23 @@ async def set_strategy(strategy_name: str):
         raise HTTPException(status_code=404, detail=f"Strategy '{strategy_name}' not found")
     
     return {"status": "success", "active_strategy": strategy_name}
+
+
+@app.post("/config/llm")
+async def configure_llm(config: LLMConfig):
+    """Update configuration for the LLM router strategy"""
+    if not router_service:
+        raise HTTPException(status_code=500, detail="Router service not initialized")
+
+    if not router_service.update_llm_config(config):
+        raise HTTPException(status_code=404, detail="LLM router strategy not available")
+
+    logger.info(
+        "Updated LLM router config (model=%s, base_url=%s)",
+        config.model or "<unchanged>",
+        config.base_url or "<unchanged>",
+    )
+    return {"status": "success"}
 
 
 def main():

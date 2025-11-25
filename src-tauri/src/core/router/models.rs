@@ -68,3 +68,17 @@ pub struct StrategyInfo {
     pub name: String,
     pub description: String,
 }
+
+/// Configuration payload for updating the LLM router
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RouterLLMConfig {
+    #[serde(rename = "apiKey")]
+    pub api_key: Option<String>,
+    #[serde(rename = "baseUrl")]
+    pub base_url: Option<String>,
+    pub model: Option<String>,
+    pub temperature: Option<f32>,
+    #[serde(rename = "maxTokens")]
+    pub max_tokens: Option<u32>,
+    pub timeout: Option<f32>,
+}

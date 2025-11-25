@@ -13,6 +13,7 @@ import { useAppState } from '@/hooks/useAppState'
 import { AppEvent, events } from '@janhq/core'
 import { SystemEvent } from '@/types/events'
 import { getModelToStart } from '@/utils/getModelToStart'
+import { isPlatformTauri } from '@/lib/platform'
 
 export function DataProvider() {
   const { setProviders, selectedModel, selectedProvider, getProviderByName } =
@@ -25,6 +26,7 @@ export function DataProvider() {
   const navigate = useNavigate()
   const serviceHub = useServiceHub()
   const setActiveModels = useAppState((state) => state.setActiveModels)
+  const serverStatus = useAppState((state) => state.serverStatus)
 
   // Local API Server hooks
   const {
@@ -108,6 +110,87 @@ export function DataProvider() {
       serviceHub.providers().getProviders().then(setProviders)
     })
   }, [serviceHub, setProviders])
+
+  // Keep Python router LLM config in sync with local API server settings
+  // Only configure when server is actually running
+  useEffect(() => {
+    if (!isPlatformTauri()) return
+    if (serverStatus !== 'running') return // Wait for server to be running
+    if (!serverHost || !serverPort) return
+
+    const prefix = apiPrefix?.startsWith('/') ? apiPrefix : `/${apiPrefix ?? ''}`
+    const sanitizedPrefix = prefix.replace(/\/+$/, '')
+    const apiKeyPayload = apiKey && apiKey.toString().trim().length > 0 ? apiKey : undefined
+    if (!apiKeyPayload) return
+
+    const baseUrl = `http://${serverHost}:${serverPort}${sanitizedPrefix}`
+
+    console.log(`[DataProvider] Configuring router with baseUrl: ${baseUrl}, model: Phi-4-mini-instruct_Q4_K_M`)
+
+    serviceHub
+      .core()
+      .invoke('configure_router_llm', {
+        config: {
+          baseUrl,
+          apiKey: apiKeyPayload,
+          model: 'Phi-4-mini-instruct_Q4_K_M', // Dedicated lightweight router model
+        },
+      })
+      .then(() => {
+        console.log('[DataProvider] Router LLM config updated successfully')
+      })
+      .catch((error) => {
+        console.warn('[DataProvider] Failed to configure Python router LLM settings:', error)
+      })
+  }, [serviceHub, serverHost, serverPort, apiPrefix, apiKey, serverStatus])
+
+  // Auto-load router model for LLM-based routing
+  // Only load after server is running to ensure it's accessible
+  useEffect(() => {
+    if (!isPlatformTauri()) return
+    if (serverStatus !== 'running') return // Wait for server to be running
+
+    const ROUTER_MODEL_ID = 'Phi-4-mini-instruct_Q4_K_M'
+    const llamacppProvider = getProviderByName('llamacpp')
+
+    if (!llamacppProvider) {
+      console.warn('[DataProvider] Cannot load router model: llamacpp provider not available')
+      return
+    }
+
+    // Check if router model exists in the provider
+    const routerModelExists = llamacppProvider.models?.some((m) => m.id === ROUTER_MODEL_ID)
+    if (!routerModelExists) {
+      console.warn(
+        `[DataProvider] Router model '${ROUTER_MODEL_ID}' not found in llamacpp provider. ` +
+          'Please download it to enable LLM-based routing.'
+      )
+      return
+    }
+
+    // Check if router model is already loaded
+    serviceHub
+      .models()
+      .getActiveModels()
+      .then((activeModels) => {
+        const isRouterModelLoaded = activeModels?.includes(ROUTER_MODEL_ID)
+
+        if (isRouterModelLoaded) {
+          console.log(`[DataProvider] Router model '${ROUTER_MODEL_ID}' is already loaded`)
+          return
+        }
+
+        // Load the router model in the background
+        console.log(`[DataProvider] Loading router model '${ROUTER_MODEL_ID}' for LLM-based routing...`)
+        return serviceHub.models().startModel(llamacppProvider, ROUTER_MODEL_ID)
+      })
+      .then(() => {
+        console.log(`[DataProvider] Router model '${ROUTER_MODEL_ID}' loaded successfully`)
+      })
+      .catch((error) => {
+        console.warn(`[DataProvider] Failed to load router model '${ROUTER_MODEL_ID}':`, error)
+      })
+  }, [serviceHub, getProviderByName, serverStatus])
 
   // Auto-start Local API Server on app startup if enabled
   useEffect(() => {

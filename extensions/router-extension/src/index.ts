@@ -86,6 +86,14 @@ export default class RouterExtension extends ModelRouterExtension {
 
     console.log(`[RouterExtension] Active strategy: ${this.activeStrategy.name}`)
     
+    // Sync strategy to Python router if available
+    if (this.usePythonRouter && this.pythonRouterAvailable) {
+      await this.syncStrategyToPythonRouter(this.activeStrategy.name).catch(error => {
+        console.warn(`[RouterExtension] Failed to sync strategy to Python router:`, error)
+        // Continue with TypeScript fallback
+      })
+    }
+    
     // Clear debug output showing which router will be used
     if (this.usePythonRouter && this.pythonRouterAvailable) {
       console.log(`✅ [RouterExtension] ROUTER MODE: PYTHON (Python service available on port 8765)`)
@@ -113,9 +121,39 @@ export default class RouterExtension extends ModelRouterExtension {
     if (this.availableStrategies.has(name)) {
       this.activeStrategy = this.availableStrategies.get(name)!
       this.saveStrategyPreference(name)
+      
+      // If using Python router, sync the strategy asynchronously
+      if (this.usePythonRouter && this.pythonRouterAvailable) {
+        this.syncStrategyToPythonRouter(name).catch(error => {
+          console.warn(`[RouterExtension] Failed to sync strategy to Python router:`, error)
+        })
+      }
+      
       return true
     }
     return false
+  }
+  
+  /**
+   * Sync strategy to Python router service (async helper)
+   * 
+   * Note: If the Python router doesn't support the strategy, it will fail gracefully
+   * and routing will fall back to TypeScript implementation
+   */
+  private async syncStrategyToPythonRouter(strategyName: string): Promise<void> {
+    try {
+      await invoke('set_router_strategy', { strategyName })
+      console.log(`[RouterExtension] ✅ Synced strategy to Python router: ${strategyName}`)
+    } catch (error: any) {
+      // Check if it's a "strategy not found" error
+      const errorStr = error?.toString() || ''
+      if (errorStr.includes('not found') || errorStr.includes('404')) {
+        console.warn(`[RouterExtension] ⚠️  Strategy '${strategyName}' not available in Python router, will use TypeScript fallback`)
+      } else {
+        // Different error - rethrow
+        throw error
+      }
+    }
   }
 
   listStrategies(): Array<{ name: string; description: string }> {
@@ -198,21 +236,32 @@ export default class RouterExtension extends ModelRouterExtension {
 
   private async loadStrategyPreference(): Promise<string | null> {
     try {
-      // Load from settings
+      // Check if settings file exists first
       const settingsPath = await joinPath(['file://settings', 'router.json'])
+      if (!(await fs.existsSync(settingsPath))) {
+        return null
+      }
+      
+      // Load from settings
       const settings = await fs.readFileSync(settingsPath)
       const parsed = JSON.parse(settings)
       return parsed?.strategy || null
     } catch (error) {
-      // File doesn't exist or error reading
+      // Error reading or parsing file
       return null
     }
   }
 
   private async saveStrategyPreference(strategyName: string): Promise<void> {
     try {
+      // Ensure settings directory exists
+      const settingsDir = 'file://settings'
+      if (!(await fs.existsSync(settingsDir))) {
+        await fs.mkdir(settingsDir)
+      }
+      
       // Save to settings
-      const settingsPath = await joinPath(['file://settings', 'router.json'])
+      const settingsPath = await joinPath([settingsDir, 'router.json'])
       await fs.writeFileSync(settingsPath, JSON.stringify({ strategy: strategyName }))
     } catch (error) {
       console.error('[RouterExtension] Failed to save strategy preference:', error)

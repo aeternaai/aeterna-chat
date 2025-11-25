@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crate::core::state::AppState;
 use super::helpers::{start_router_service, stop_router_service, wait_for_router_ready};
-use super::models::{RouteRequest, RouteResponse, RouterConfig, HealthResponse, StrategyInfo};
+use super::models::{RouteRequest, RouteResponse, RouterConfig, HealthResponse, StrategyInfo, RouterLLMConfig};
 
 /// Start the router service
 #[tauri::command]
@@ -202,5 +202,36 @@ pub async fn set_router_strategy(
     }
 
     log::info!("Set router strategy to: {}", strategy_name);
+    Ok(())
+}
+
+/// Update LLM router configuration
+#[tauri::command]
+pub async fn configure_router_llm(
+    state: State<'_, AppState>,
+    config: RouterLLMConfig,
+) -> Result<(), String> {
+    let router_state = state.router_config.lock().await.clone();
+    let url = format!("http://{}:{}/config/llm", router_state.host, router_state.port);
+
+    let client = reqwest::Client::new();
+    let response = timeout(
+        Duration::from_secs(5),
+        client.post(&url).json(&config).send()
+    )
+    .await
+    .map_err(|_| "Router configuration request timed out".to_string())?
+    .map_err(|e| format!("Failed to configure router: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("Router returned error {}: {}", status, error_text));
+    }
+
+    log::info!("Updated Python router LLM configuration");
     Ok(())
 }

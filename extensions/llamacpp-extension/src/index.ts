@@ -186,6 +186,8 @@ const logger = {
 export default class llamacpp_extension extends AIEngine {
   provider: string = 'llamacpp'
   autoUnload: boolean = true
+  // Router model ID to exempt from auto-unload
+  routerModelId: string = 'Phi-4-mini-instruct_Q4_K_M'
   timeout: number = 600
   llamacpp_env: string = ''
   memoryMode: string = ''
@@ -1681,8 +1683,13 @@ export default class llamacpp_extension extends AIEngine {
             (s): s is SessionInfo => s !== null && s.is_embedding === false
           )
           .map((s) => s.model_id)
+          // Exclude router model from auto-unload to prevent 404 errors in LLM routing
+          .filter((id) => id !== this.routerModelId)
 
         if (nonEmbeddingModels.length > 0) {
+          logger.info(
+            `Auto-unloading ${nonEmbeddingModels.length} models (preserving router model: ${this.routerModelId})`
+          )
           await Promise.all(
             nonEmbeddingModels.map((modelId) => this.unload(modelId))
           )

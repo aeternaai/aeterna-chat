@@ -5,9 +5,10 @@ Manages routing strategies and coordinates model selection
 import logging
 from typing import Optional
 
-from models import RouteRequest, RouteResponse, StrategyInfo
+from models import LLMConfig, RouteRequest, RouteResponse, StrategyInfo
 from strategies.base import RouterStrategy
 from strategies.heuristic import HeuristicRouter
+from strategies.llm import LLMRouter
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +35,18 @@ class RouterService:
         heuristic = HeuristicRouter()
         self.strategies[heuristic.name] = heuristic
         
+        # LLM router (OpenAI-compatible meta model)
+        try:
+            llm_router = LLMRouter()
+            self.strategies[llm_router.name] = llm_router
+            logger.info("Registered LLM router strategy")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "LLM router not registered: %s", exc
+            )
+
         # TODO: Add more strategies
         # - EmbeddingRouter (semantic similarity)
-        # - LLMRouter (LLM-based routing)
         # - MLRouter (ML classifier)
         
         logger.info(f"Registered {len(self.strategies)} routing strategies")
@@ -75,6 +85,24 @@ class RouterService:
             StrategyInfo(name=s.name, description=s.description)
             for s in self.strategies.values()
         ]
+
+    def update_llm_config(self, config: LLMConfig) -> bool:
+        """Update runtime configuration for the LLM router"""
+
+        strategy = self.strategies.get("llm-based")
+        if not isinstance(strategy, LLMRouter):
+            logger.warning("LLM router strategy not registered; cannot update config")
+            return False
+
+        strategy.update_config(
+            api_key=config.api_key,
+            base_url=config.base_url,
+            model_id=config.model,
+            temperature=config.temperature,
+            timeout=config.timeout,
+            max_tokens=config.max_tokens,
+        )
+        return True
     
     async def route(self, request: RouteRequest) -> RouteResponse:
         """
