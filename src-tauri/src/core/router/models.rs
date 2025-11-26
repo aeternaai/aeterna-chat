@@ -36,8 +36,12 @@ pub struct RouteRequest {
     pub thread_id: Option<String>,
     #[serde(rename = "availableModels")]
     pub available_models: Vec<Value>,
+    #[serde(rename = "routerModel")]
+    pub router_model: Option<Value>,
     #[serde(rename = "activeModels")]
     pub active_models: Vec<String>,
+    #[serde(rename = "modelRoutingConfigs")]
+    pub model_routing_configs: Option<Vec<Value>>,
     pub attachments: Option<Value>,
     pub preferences: Option<Value>,
 }

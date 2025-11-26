@@ -1,12 +1,12 @@
 [
   {
-    "key": "allowed_models",
-    "title": "Allowed Models",
-    "description": "Comma-separated list of model IDs that the router is allowed to select. Leave empty to allow all models.",
+    "key": "model_routing_configs",
+    "title": "Model Routing Configuration",
+    "description": "Configure models with descriptions for when the router should select them. Format: JSON array with {id, description} objects.",
     "controllerType": "input",
     "controllerProps": {
-      "value": "Qwen3-VL-8B-Instruct-IQ4_XS,gemma-3n-E4B-it-IQ4_XS",
-      "placeholder": "e.g., Qwen3-VL-8B-Instruct-IQ4_XS,gemma-3n-E4B-it-IQ4_XS",
+      "value": "[{\"id\":\"Qwen3-VL-8B-Instruct-IQ4_XS\",\"description\":\"Vision and image understanding tasks. Use for analyzing images, describing visual content, OCR, and any query involving pictures or visual data.\"},{\"id\":\"gemma-3n-E4B-it-IQ4_XS\",\"description\":\"Coding, programming, technical documentation, and software development tasks. Use for generating code, debugging, explaining algorithms, and technical problem-solving.\"},{\"id\":\"Phi-4-mini-instruct_Q4_K_M\",\"description\":\"General purpose queries, creative writing, explanations, and reasoning. Use for general knowledge questions, writing assistance, and tasks that don't require specialized vision or coding capabilities.\"}]",
+      "placeholder": "[{\"id\":\"model-id\",\"description\":\"When to use this model\"}]",
       "type": "text"
     }
   }

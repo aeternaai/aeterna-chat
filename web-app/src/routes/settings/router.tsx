@@ -13,6 +13,11 @@ export const Route = createFileRoute(route.settings.router as any)({
   component: RouterSettings,
 })
 
+interface ModelRoutingConfig {
+  id: string
+  description: string
+}
+
 function RouterSettings() {
   const [strategies, setStrategies] = useState<
     Array<{ name: string; description: string }>
@@ -20,6 +25,9 @@ function RouterSettings() {
   const [currentStrategy, setCurrentStrategy] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [allowedModels, setAllowedModels] = useState<string>('')
+  const [routingConfigs, setRoutingConfigs] = useState<ModelRoutingConfig[]>([])
+  const [editingConfigIndex, setEditingConfigIndex] = useState<number | null>(null)
+  const [newConfig, setNewConfig] = useState<ModelRoutingConfig>({ id: '', description: '' })
   const routingEnabled = useAppState((state) => state.routingEnabled)
   const setRoutingEnabled = useAppState((state) => state.setRoutingEnabled)
 
@@ -49,6 +57,18 @@ function RouterSettings() {
           const allowedModelsSetting = settings.find(s => s.key === 'allowed_models')
           if (allowedModelsSetting) {
             setAllowedModels(allowedModelsSetting.controllerProps.value as string)
+          }
+          
+          // Load model routing configs
+          const routingConfigsSetting = settings.find(s => s.key === 'model_routing_configs')
+          if (routingConfigsSetting) {
+            try {
+              const configs = JSON.parse(routingConfigsSetting.controllerProps.value as string)
+              setRoutingConfigs(Array.isArray(configs) ? configs : [])
+            } catch (err) {
+              console.error('[Router Settings] Failed to parse routing configs:', err)
+              setRoutingConfigs([])
+            }
           }
         }
 
@@ -81,6 +101,18 @@ function RouterSettings() {
                 const allowedModelsSetting = settings.find(s => s.key === 'allowed_models')
                 if (allowedModelsSetting) {
                   setAllowedModels(allowedModelsSetting.controllerProps.value as string)
+                }
+                
+                // Load model routing configs on retry
+                const routingConfigsSetting = settings.find(s => s.key === 'model_routing_configs')
+                if (routingConfigsSetting) {
+                  try {
+                    const configs = JSON.parse(routingConfigsSetting.controllerProps.value as string)
+                    setRoutingConfigs(Array.isArray(configs) ? configs : [])
+                  } catch (err) {
+                    console.error('[Router Settings] Failed to parse routing configs:', err)
+                    setRoutingConfigs([])
+                  }
                 }
               })
             }
@@ -142,6 +174,64 @@ function RouterSettings() {
     },
     []
   )
+
+  const saveRoutingConfigs = useCallback(
+    async (configs: ModelRoutingConfig[]) => {
+      try {
+        const router = RouterManager.instance().get()
+        if (router && router.updateSettings) {
+          const value = JSON.stringify(configs)
+          await router.updateSettings([
+            { key: 'model_routing_configs', controllerProps: { value } }
+          ])
+          console.log('[Router Settings] Updated routing configs:', configs)
+        }
+      } catch (error) {
+        console.error('Failed to update routing configs:', error)
+      }
+    },
+    []
+  )
+
+  const handleAddConfig = useCallback(() => {
+    if (!newConfig.id.trim() || !newConfig.description.trim()) {
+      return
+    }
+    
+    const updatedConfigs = [...routingConfigs, { ...newConfig }]
+    setRoutingConfigs(updatedConfigs)
+    setNewConfig({ id: '', description: '' })
+    saveRoutingConfigs(updatedConfigs)
+  }, [newConfig, routingConfigs, saveRoutingConfigs])
+
+  const handleEditConfig = useCallback((index: number) => {
+    setEditingConfigIndex(index)
+    setNewConfig({ ...routingConfigs[index] })
+  }, [routingConfigs])
+
+  const handleSaveEdit = useCallback(() => {
+    if (editingConfigIndex === null || !newConfig.id.trim() || !newConfig.description.trim()) {
+      return
+    }
+    
+    const updatedConfigs = [...routingConfigs]
+    updatedConfigs[editingConfigIndex] = { ...newConfig }
+    setRoutingConfigs(updatedConfigs)
+    setEditingConfigIndex(null)
+    setNewConfig({ id: '', description: '' })
+    saveRoutingConfigs(updatedConfigs)
+  }, [editingConfigIndex, newConfig, routingConfigs, saveRoutingConfigs])
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingConfigIndex(null)
+    setNewConfig({ id: '', description: '' })
+  }, [])
+
+  const handleDeleteConfig = useCallback((index: number) => {
+    const updatedConfigs = routingConfigs.filter((_, i) => i !== index)
+    setRoutingConfigs(updatedConfigs)
+    saveRoutingConfigs(updatedConfigs)
+  }, [routingConfigs, saveRoutingConfigs])
 
   if (loading) {
     return (
@@ -285,6 +375,156 @@ function RouterSettings() {
                   Example: <code className="px-1 py-0.5 bg-main-view-fg/5 rounded">Qwen3-VL-8B-Instruct-IQ4_XS,gemma-3n-E4B-it-IQ4_XS</code>
                 </p>
               </div>
+            </Card>
+
+            {/* Model Routing Configuration */}
+            <Card title="Model Routing Configuration">
+              <CardItem
+                title="Configure Model Selection"
+                description="Define when each model should be used by the LLM-based router. Add descriptions that help the router understand which model to select for different types of queries."
+                className="flex-col items-start gap-y-2"
+              />
+              
+              {/* Existing configurations list */}
+              {routingConfigs.length > 0 && (
+                <div className="px-4 pb-2">
+                  <div className="space-y-2">
+                    {routingConfigs.map((config, index) => (
+                      <div
+                        key={index}
+                        className="p-3 border border-main-view-fg/10 rounded-lg bg-main-view-fg/5"
+                      >
+                        {editingConfigIndex === index ? (
+                          // Edit mode
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-xs text-main-view-fg/60 block mb-1">
+                                Model ID
+                              </label>
+                              <input
+                                type="text"
+                                value={newConfig.id}
+                                onChange={(e) =>
+                                  setNewConfig({ ...newConfig, id: e.target.value })
+                                }
+                                placeholder="e.g., Qwen3-VL-8B-Instruct-IQ4_XS"
+                                className="w-full px-2 py-1.5 text-sm border border-main-view-fg/10 rounded bg-transparent text-main-view-fg focus:outline-none focus:border-primary"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-main-view-fg/60 block mb-1">
+                                When to use this model
+                              </label>
+                              <textarea
+                                value={newConfig.description}
+                                onChange={(e) =>
+                                  setNewConfig({ ...newConfig, description: e.target.value })
+                                }
+                                placeholder="Describe when the router should select this model..."
+                                rows={3}
+                                className="w-full px-2 py-1.5 text-sm border border-main-view-fg/10 rounded bg-transparent text-main-view-fg focus:outline-none focus:border-primary resize-none"
+                              />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={handleCancelEdit}
+                                className="px-3 py-1 text-xs border border-main-view-fg/10 rounded hover:bg-main-view-fg/5 text-main-view-fg transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleSaveEdit}
+                                disabled={!newConfig.id.trim() || !newConfig.description.trim()}
+                                className="px-3 py-1 text-xs bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          // View mode
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <code className="text-xs font-mono text-primary">
+                                  {config.id}
+                                </code>
+                              </div>
+                              <p className="text-xs text-main-view-fg/70">
+                                {config.description}
+                              </p>
+                            </div>
+                            <div className="flex gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => handleEditConfig(index)}
+                                className="px-2 py-1 text-xs border border-main-view-fg/10 rounded hover:bg-main-view-fg/10 text-main-view-fg transition-colors"
+                                title="Edit configuration"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteConfig(index)}
+                                className="px-2 py-1 text-xs border border-red-500/20 rounded hover:bg-red-500/10 text-red-500 transition-colors"
+                                title="Delete configuration"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Add new configuration form */}
+              {editingConfigIndex === null && (
+                <div className="px-4 pb-4">
+                  <div className="p-3 border border-dashed border-main-view-fg/20 rounded-lg space-y-2">
+                    <div>
+                      <label className="text-xs text-main-view-fg/60 block mb-1">
+                        Model ID
+                      </label>
+                      <input
+                        type="text"
+                        value={newConfig.id}
+                        onChange={(e) =>
+                          setNewConfig({ ...newConfig, id: e.target.value })
+                        }
+                        placeholder="e.g., Qwen3-VL-8B-Instruct-IQ4_XS"
+                        className="w-full px-2 py-1.5 text-sm border border-main-view-fg/10 rounded bg-transparent text-main-view-fg focus:outline-none focus:border-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-main-view-fg/60 block mb-1">
+                        When to use this model
+                      </label>
+                      <textarea
+                        value={newConfig.description}
+                        onChange={(e) =>
+                          setNewConfig({ ...newConfig, description: e.target.value })
+                        }
+                        placeholder="Vision and image understanding tasks. Use for analyzing images, describing visual content, OCR, and any query involving pictures or visual data."
+                        rows={3}
+                        className="w-full px-2 py-1.5 text-sm border border-main-view-fg/10 rounded bg-transparent text-main-view-fg focus:outline-none focus:border-primary resize-none"
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleAddConfig}
+                        disabled={!newConfig.id.trim() || !newConfig.description.trim()}
+                        className="px-3 py-1.5 text-xs bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Add Model Configuration
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-main-view-fg/60 mt-2">
+                    💡 Tip: Write clear, specific descriptions that explain when this model should be selected. The LLM router uses these descriptions to make intelligent routing decisions.
+                  </p>
+                </div>
+              )}
             </Card>
 
             {/* Info Section */}

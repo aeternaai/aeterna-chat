@@ -130,19 +130,42 @@ class LLMRouter(RouterStrategy):
 			raise ValueError("No available models to route to")
 
 		query = self._get_message_content(request.messages[-1])
+		
+		# Log router model info
+		router_model_info = "none"
+		if request.router_model:
+			router_model_info = f"{request.router_model.id} ({'loaded' if request.router_model.metadata.is_loaded else 'not loaded'})"
+		logger.info("[LLMRouter] Router model: %s", router_model_info)
+		
+		# Debug: Log model_routing_configs received in request
+		logger.info("[LLMRouter] RouteRequest.model_routing_configs: %s", request.model_routing_configs)
+		if request.model_routing_configs:
+			logger.info("[LLMRouter] Number of routing configs: %d", len(request.model_routing_configs))
+		else:
+			logger.warning("[LLMRouter] ⚠️  No model_routing_configs received in request!")
+		
+		# Ensure router model is not in available models list
+		available_model_ids = [m.id for m in request.available_models]
+		if request.router_model and request.router_model.id in available_model_ids:
+			logger.warning(
+				"[LLMRouter] ⚠️  Router model '%s' found in available models list - this should not happen!",
+				request.router_model.id
+			)
+		
 		prompt = self._build_routing_prompt(
 			query=query,
 			models=request.available_models,
+			model_routing_configs=request.model_routing_configs,
 			attachments=request.attachments,
 			preferences=request.preferences,
 		)
 
 		logger.info(
-			"[LLMRouter] Starting route() with %d candidate models (query chars=%d)",
+			"[LLMRouter] Starting route() with %d response models (query chars=%d)",
 			len(request.available_models),
 			len(query),
 		)
-		logger.debug("[LLMRouter] Available models: %s", [m.id for m in request.available_models])
+		logger.debug("[LLMRouter] Response models: %s", [m.id for m in request.available_models])
 
 		try:
 			response_text = await self._call_router_model(prompt)
@@ -202,8 +225,9 @@ class LLMRouter(RouterStrategy):
 				{
 					"role": "system",
 					"content": (
-						"You are an expert model routing assistant."
-						"Analyze the query and return BEST_MODEL_NUMBER|reason."
+						"You are an expert model routing assistant. "
+						"Analyze the query and respond with ONLY the model ID of the best model. "
+						"Return just the model ID, nothing else."
 					),
 				},
 				{
@@ -284,19 +308,49 @@ class LLMRouter(RouterStrategy):
 		self,
 		query: str,
 		models: list[AvailableModel],
-		attachments: Optional[Attachments],
-		preferences: Optional[RoutePreferences],
+		model_routing_configs: Optional[list] = None,
+		attachments: Optional[Attachments] = None,
+		preferences: Optional[RoutePreferences] = None,
 	) -> str:
+		"""Build routing prompt with model-specific routing descriptions"""
+		
+		# Debug: Log what we received
+		logger.info("[LLMRouter] _build_routing_prompt called with:")
+		logger.info("[LLMRouter]   - models: %d", len(models))
+		logger.info("[LLMRouter]   - model_routing_configs: %s", model_routing_configs)
+		logger.info("[LLMRouter]   - model_routing_configs type: %s", type(model_routing_configs))
+		if model_routing_configs:
+			logger.info("[LLMRouter]   - model_routing_configs length: %d", len(model_routing_configs))
+			for i, config in enumerate(model_routing_configs):
+				logger.info("[LLMRouter]     [%d] %s", i, config)
+		
+		# Create a mapping of model ID to routing description
+		routing_descriptions = {}
+		if model_routing_configs:
+			for config in model_routing_configs:
+				routing_descriptions[config.id] = config.description
+				logger.info("[LLMRouter] Added routing desc for %s: %s", config.id, config.description[:50])
+		
 		model_lines: list[str] = []
 		for idx, model in enumerate(models, start=1):
 			caps = ", ".join(model.capabilities) if model.capabilities else "none"
 			metadata = model.metadata
+			
+			# Use routing description if available, otherwise use basic model info
+			routing_desc = routing_descriptions.get(model.id)
+			if routing_desc:
+				# Include both the custom description AND the capabilities
+				model_description = f"{routing_desc}\n   Capabilities: {caps}"
+			else:
+				# Fallback: generate description from capabilities only
+				model_description = f"Capabilities: {caps}"
+			
 			model_lines.append(
 				(
-					f"{idx}. {model.id} [{model.provider_id}] - {caps}"
-					f" | size={metadata.parameter_count or 'unknown'}"
-					f" | ctx={metadata.context_window or 'unknown'}"
-					f" | {'loaded' if metadata.is_loaded else 'cold'}"
+					f"{idx}. Model ID: {model.id}\n"
+					f"   When to use: {model_description}\n"
+					f"   Size: {metadata.parameter_count or 'unknown'}\n"
+					f"   Status: {'loaded and ready' if metadata.is_loaded else 'will need loading'}"
 				)
 			)
 
@@ -312,13 +366,24 @@ class LLMRouter(RouterStrategy):
 			else {"note": "none"}
 		)
 		preference_text = json.dumps(preference_payload, default=str)
+		
 		prompt = (
-			"Query: \"{}\"\n\n"
+			"User query: \"{}\"\n\n"
 			"Attachments: {}\n"
-			"Preferences: {}\n\n"
-			"Available models:\n{}\n\n"
-			"Respond ONLY with '<number>|<reason>'"
-		).format(query, attachment_text, preference_text, "\n".join(model_lines))
+			"User preferences: {}\n\n"
+			"Available models to choose from:\n{}\n\n"
+			"INSTRUCTIONS:\n"
+			"1. You are a helpful assistant that routes user queries to the appropriate model.\n"
+			"2. Choose the model whose description best matches the query's requirements\n"
+			"3. If the user explicitly requests a specific model by name, select that model\n\n"
+			"Respond with ONLY the Model ID of the best model. Just the Model ID, nothing else.\n"
+			"Example: Qwen3-VL-8B-Instruct-IQ4_XS\n"
+			"Example: gemma-3n-E4B-it-IQ4_XS"
+		).format(query, attachment_text, preference_text, "\n\n".join(model_lines))
+		
+		logger.info("[LLMRouter] Built prompt with %d models and routing descriptions", len(models))
+		logger.info("[LLMRouter] Full prompt:\n%s", prompt)
+		
 		return prompt
 
 	def _parse_router_response(
@@ -329,50 +394,43 @@ class LLMRouter(RouterStrategy):
 		text = response_text.strip()
 		logger.info("[LLMRouter] Parsing router response: '%s'", text)
 
-		match = re.match(r"^(\d+)\s*\|\s*(.+)$", text)
-		model_index: Optional[int] = None
-		reasoning = ""
-
-		if match:
-			model_index = int(match.group(1)) - 1
-			reasoning = match.group(2).strip()
-			logger.info(
-				"[LLMRouter] Parsed format '<number>|<reason>': index=%d, reasoning='%s'",
-				model_index,
-				reasoning[:100]
-			)
+		# Build a map of model IDs for lookup
+		model_map = {model.id: model for model in models}
+		
+		# Try to match the response text to a model ID
+		selected: Optional[AvailableModel] = None
+		
+		# First, try exact match
+		if text in model_map:
+			selected = model_map[text]
+			logger.info("[LLMRouter] Exact match found for model ID: '%s'", text)
 		else:
-			index_match = re.search(r"(\d+)", text)
-			if index_match:
-				model_index = int(index_match.group(1)) - 1
-				reasoning = text.partition("|")[2].strip() or "LLM router response"
-				logger.info(
-					"[LLMRouter] Extracted number from text: index=%d, reasoning='%s'",
-					model_index,
-					reasoning[:100]
-				)
-
-		if model_index is None:
+			# Try case-insensitive match
+			text_lower = text.lower()
+			for model_id, model in model_map.items():
+				if model_id.lower() == text_lower:
+					selected = model
+					logger.info("[LLMRouter] Case-insensitive match found: '%s' -> '%s'", text, model_id)
+					break
+			
+			# If still not found, try partial match (response contains model ID)
+			if not selected:
+				for model_id, model in model_map.items():
+					if model_id in text or model_id.lower() in text_lower:
+						selected = model
+						logger.info("[LLMRouter] Partial match found: '%s' contains '%s'", text, model_id)
+						break
+		
+		# Fallback to first model if no match found
+		if not selected:
 			logger.warning(
-				"[LLMRouter] Could not parse response '%s', defaulting to first model (index=0)",
+				"[LLMRouter] Could not match response '%s' to any model ID, defaulting to first model",
 				text,
 			)
-			model_index = 0
-			reasoning = "Failed to parse LLM router response"
+			selected = models[0]
 
-		if model_index < 0 or model_index >= len(models):
-			logger.warning(
-				"[LLMRouter] Response index %s out of bounds (valid: 0-%d), defaulting to first model",
-				model_index,
-				len(models) - 1,
-			)
-			model_index = 0
-			reasoning = "Invalid index from LLM router"
-
-		selected = models[model_index]
 		logger.info(
-			"[LLMRouter] Final selection: models[%d] = '%s' (provider: %s)",
-			model_index,
+			"[LLMRouter] Final selection: '%s' (provider: %s)",
 			selected.id,
 			selected.provider_id
 		)
@@ -381,10 +439,9 @@ class LLMRouter(RouterStrategy):
 			modelId=selected.id,
 			providerId=selected.provider_id,
 			confidence=0.85,
-			reasoning=reasoning,
+			reasoning="no reason",
 			metadata={
 				"router_response": text,
-				"parsed_index": model_index,
 			},
 		)
 

@@ -75,19 +75,39 @@ const inferCapabilities = (model: Model): string[] => {
 }
 
 // Helper to build available models array from providers
+const ROUTER_MODEL_ID = 'Phi-4-mini-instruct_Q4_K_M'
+
 const buildAvailableModels = (
   providers: ModelProvider[],
-  activeModelIds: string[] = []
+  activeModelIds: string[] = [],
+  excludeRouterModel: boolean = false
 ): AvailableModel[] => {
   const availableModels: AvailableModel[] = []
 
+  console.log('[buildAvailableModels] Building with', providers.length, 'providers')
+  console.log('[buildAvailableModels] Active model IDs:', activeModelIds)
+  console.log('[buildAvailableModels] Exclude router model:', excludeRouterModel)
+
   for (const provider of providers) {
-    if (!provider.active) continue
+    console.log(`[buildAvailableModels] Provider: ${provider.provider}, active: ${provider.active}, models: ${provider.models.length}`)
+    if (!provider.active) {
+      console.log(`[buildAvailableModels] Skipping inactive provider: ${provider.provider}`)
+      continue
+    }
 
     for (const model of provider.models) {
+      // Skip router model if requested (for response models list)
+      if (excludeRouterModel && model.id === ROUTER_MODEL_ID) {
+        console.log(`[buildAvailableModels]   Skipping router model: ${model.id}`)
+        continue
+      }
+
       // Extract parameter count from model name (e.g., "7B", "13B", "70B")
       const paramCountMatch = model.id.match(/(\d+\.?\d*)B/i)
       const parameterCount = paramCountMatch ? paramCountMatch[1] + 'B' : undefined
+
+      const isLoaded = activeModelIds.includes(model.id)
+      console.log(`[buildAvailableModels]   Model: ${model.id}, loaded: ${isLoaded}`)
 
       availableModels.push({
         id: model.id,
@@ -99,13 +119,56 @@ const buildAvailableModels = (
             typeof model.settings?.ctx_len === 'number'
               ? model.settings.ctx_len
               : 4096,
-          isLoaded: activeModelIds.includes(model.id),
+          isLoaded,
         },
       })
     }
   }
 
+  console.log('[buildAvailableModels] Built', availableModels.length, 'available models')
+  console.log('[buildAvailableModels] Model IDs:', availableModels.map(m => m.id))
+
   return availableModels
+}
+
+/**
+ * Build router model separately from response models
+ */
+const buildRouterModel = (
+  providers: ModelProvider[],
+  activeModelIds: string[] = []
+): AvailableModel | undefined => {
+  console.log('[buildRouterModel] Looking for router model:', ROUTER_MODEL_ID)
+  
+  for (const provider of providers) {
+    if (!provider.active) continue
+    
+    const routerModel = provider.models.find(m => m.id === ROUTER_MODEL_ID)
+    if (routerModel) {
+      const isLoaded = activeModelIds.includes(routerModel.id)
+      console.log('[buildRouterModel] Found router model:', ROUTER_MODEL_ID, 'loaded:', isLoaded)
+      
+      const paramCountMatch = routerModel.id.match(/(\d+\.?\d*)B/i)
+      const parameterCount = paramCountMatch ? paramCountMatch[1] + 'B' : undefined
+      
+      return {
+        id: routerModel.id,
+        providerId: provider.provider,
+        capabilities: inferCapabilities(routerModel),
+        metadata: {
+          parameterCount,
+          contextWindow: 
+            typeof routerModel.settings?.ctx_len === 'number'
+              ? routerModel.settings.ctx_len
+              : 4096,
+          isLoaded,
+        },
+      }
+    }
+  }
+  
+  console.log('[buildRouterModel] Router model not found')
+  return undefined
 }
 import { useMCPServers } from '@/hooks/useMCPServers'
 
@@ -718,9 +781,15 @@ export const useChat = () => {
           if (router) {
             const providers = useModelProvider.getState().providers
             const activeModelIds = useAppState.getState().activeModels
-            const availableModels = buildAvailableModels(providers, activeModelIds)
             
-            console.log('[Router] Routing query with', availableModels.length, 'available models')
+            // Build response models (excluding router model)
+            const availableModels = buildAvailableModels(providers, activeModelIds, false)
+            
+            // Build router model separately
+            const routerModel = buildRouterModel(providers, activeModelIds)
+            
+            console.log('[Router] Routing query with', availableModels.length, 'response models')
+            console.log('[Router] Router model:', routerModel?.id || 'none')
             console.log('[Router] Active models:', activeModelIds)
             
             // Check if there are any available models
@@ -745,6 +814,7 @@ export const useChat = () => {
               messages: routingMessages,
               threadId: activeThread.id,
               availableModels,
+              routerModel,
               activeModels: activeModelIds,
               attachments: {
                 images: images.length,

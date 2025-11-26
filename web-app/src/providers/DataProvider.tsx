@@ -186,6 +186,14 @@ export function DataProvider() {
       })
       .then(() => {
         console.log(`[DataProvider] Router model '${ROUTER_MODEL_ID}' loaded successfully`)
+        
+        // Mark this session as the router session to exempt from auto-unload
+        // This is critical if using the same model for both routing and answering
+        if (llamacppProvider && typeof (llamacppProvider as any).setRouterSession === 'function') {
+          ;(llamacppProvider as any).setRouterSession(ROUTER_MODEL_ID).catch((error: Error) => {
+            console.warn('[DataProvider] Failed to mark router session:', error)
+          })
+        }
       })
       .catch((error) => {
         console.warn(`[DataProvider] Failed to load router model '${ROUTER_MODEL_ID}':`, error)

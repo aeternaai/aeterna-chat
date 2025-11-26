@@ -159,19 +159,21 @@ else ifeq ($(shell uname -s),Linux)
 	rm -rf "~/.cache/jan*"
 	rm -rf "./.cache"
 else
-	find . -name "node_modules" -type d -prune -exec rm -rfv '{}' +
-	find . -name ".next" -type d -exec rm -rfv '{}' +
-	find . -name "dist" -type d -exec rm -rfv '{}' +
-	find . -name "build" -type d -exec rm -rfv '{}' +
-	find . -name "out" -type d -exec rm -rfv '{}' +
-	find . -name ".turbo" -type d -exec rm -rfv '{}' +
-	find . -name ".yarn" -type d -exec rm -rfv '{}' +
-	find . -name "package-lock.json" -type f -exec rm -rfv '{}' +
-	rm -rfv ./pre-install/*.tgz
-	rm -rfv ./extensions/*/*.tgz
-	rm -rfv ./electron/pre-install/*.tgz
-	rm -rfv ./src-tauri/resources
-	rm -rfv ./src-tauri/target
-	rm -rfv ~/jan/extensions
-	rm -rfv ~/Library/Caches/jan*
+	@echo "Cleaning project (macOS)..."
+	-find . -name "node_modules" -type d -prune -exec rm -rf '{}' + 2>/dev/null || true
+	-find . -name ".next" -type d -exec rm -rf '{}' + 2>/dev/null || true
+	-find . -name "dist" -type d -exec rm -rf '{}' + 2>/dev/null || true
+	-find . -name "build" -type d -exec rm -rf '{}' + 2>/dev/null || true
+	-find . -name "out" -type d -exec rm -rf '{}' + 2>/dev/null || true
+	-find . -name ".turbo" -type d -exec rm -rf '{}' + 2>/dev/null || true
+	-find . -name ".yarn" -type d -exec rm -rf '{}' + 2>/dev/null || true
+	-find . -name "package-lock.json" -type f -exec rm -f '{}' + 2>/dev/null || true
+	-rm -rf ./pre-install/*.tgz 2>/dev/null || true
+	-rm -rf ./extensions/*/*.tgz 2>/dev/null || true
+	-rm -rf ./electron/pre-install/*.tgz 2>/dev/null || true
+	-rm -rf ./src-tauri/resources 2>/dev/null || true
+	-rm -rf ./src-tauri/target 2>/dev/null || true
+	-rm -rf ~/jan/extensions 2>/dev/null || true
+	-rm -rf ~/Library/Caches/jan* 2>/dev/null || true
+	@echo "Clean complete!"
 endif

@@ -19,6 +19,12 @@ class ModelMetadata(BaseModel):
     is_loaded: Optional[bool] = Field(False, alias="isLoaded")
 
 
+class ModelRoutingConfig(BaseModel):
+    """Configuration for when to route to a specific model"""
+    id: str
+    description: str
+
+
 class AvailableModel(BaseModel):
     """Available model information for routing"""
     id: str
@@ -48,6 +54,8 @@ class RouteRequest(BaseModel):
     messages: list[Message]
     thread_id: Optional[str] = Field(None, alias="threadId")
     available_models: list[AvailableModel] = Field(alias="availableModels")
+    router_model: Optional[AvailableModel] = Field(None, alias="routerModel")
+    model_routing_configs: Optional[list[ModelRoutingConfig]] = Field(None, alias="modelRoutingConfigs")
     active_models: list[str] = Field(default_factory=list, alias="activeModels")
     attachments: Optional[Attachments] = None
     preferences: Optional[RoutePreferences] = None

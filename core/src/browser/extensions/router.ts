@@ -66,8 +66,11 @@ export interface RouteContext {
   /** Thread ID for context */
   threadId?: string
 
-  /** Available models (from ModelProvider state) */
+  /** Available response models (from ModelProvider state) - excludes router model */
   availableModels: AvailableModel[]
+
+  /** Router model (used for routing decisions, separate from response models) */
+  routerModel?: AvailableModel
 
   /** Currently active/loaded models */
   activeModels: string[]

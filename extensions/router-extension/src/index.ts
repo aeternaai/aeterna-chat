@@ -33,7 +33,7 @@ async function isTauriContext(): Promise<boolean> {
 export default class RouterExtension extends ModelRouterExtension {
   private activeStrategy: RouterStrategy
   private availableStrategies: Map<string, RouterStrategy>
-  private allowedModels: string[] = []
+  private modelRoutingConfigs: Array<{id: string, description: string}> = []
   private usePythonRouter: boolean = true
   private pythonRouterAvailable: boolean = false
 
@@ -57,13 +57,13 @@ export default class RouterExtension extends ModelRouterExtension {
     const settings = structuredClone(SETTINGS)
     await this.registerSettings(settings)
 
-    // Load allowed models from settings
-    const allowedModelsStr = await this.getSetting<string>(
-      'allowed_models',
-      'Qwen3-VL-8B-Instruct-IQ4_XS,gemma-3n-E4B-it-IQ4_XS'
+    // Load routing configs from settings
+    const routingConfigsStr = await this.getSetting<string>(
+      'model_routing_configs',
+      '[{"id":"Qwen3-VL-8B-Instruct-IQ4_XS","description":"Vision and image understanding tasks. Use for analyzing images, describing visual content, OCR, and any query involving pictures or visual data."},{"id":"gemma-3n-E4B-it-IQ4_XS","description":"Coding, programming, and technical documentation tasks. Use for writing code, debugging, explaining technical concepts, and software development."}]'
     )
-    this.allowedModels = this.parseAllowedModels(allowedModelsStr)
-    console.log('[RouterExtension] Allowed models:', this.allowedModels)
+    this.modelRoutingConfigs = this.parseRoutingConfigs(routingConfigsStr)
+    console.log('[RouterExtension] Model routing configs:', this.modelRoutingConfigs)
 
     // Register with RouterManager
     const routerManager = typeof window !== 'undefined' && window.core?.routerManager 
@@ -165,17 +165,24 @@ export default class RouterExtension extends ModelRouterExtension {
 
   async route(context: RouteContext): Promise<RouteDecision> {
     console.log(`[RouterExtension] Routing request...`)
+    console.log(`[RouterExtension] Input available response models (${context.availableModels.length}):`, context.availableModels.map(m => m.id))
+    console.log(`[RouterExtension] Router model:`, context.routerModel?.id || 'none')
+    console.log(`[RouterExtension] Model routing configs (${this.modelRoutingConfigs.length}):`, this.modelRoutingConfigs)
 
-    // Filter by allowed models
+    // Filter by routing configs - only applies to RESPONSE models
     const filteredModels = this.filterAllowedModels(context.availableModels)
-
+    console.log(`[RouterExtension] After filtering (${filteredModels.length}):`, filteredModels.map(m => m.id))
+    
+    // Create filtered context with response models only (router model passed separately)
     const filteredContext = {
       ...context,
       availableModels: filteredModels,
     }
 
+    console.log(`[RouterExtension] Final available response models (${filteredContext.availableModels.length}):`, filteredContext.availableModels.map(m => m.id))
+
     if (filteredContext.availableModels.length === 0) {
-      console.error('[RouterExtension] No models available after filtering by allowed models')
+      console.error('[RouterExtension] No response models available after filtering by allowed models')
       throw new Error('No suitable models available for routing. Please check your allowed models configuration.')
     }
 
@@ -183,17 +190,25 @@ export default class RouterExtension extends ModelRouterExtension {
     if (this.usePythonRouter && this.pythonRouterAvailable) {
       try {
         console.log(`🐍 [RouterExtension] Using PYTHON router service`)
+        console.log(`🐍 [RouterExtension] Router model:`, context.routerModel?.id || 'not provided')
+        console.log(`🐍 [RouterExtension] Sending ${filteredContext.availableModels.length} response models to Python router:`)
+        filteredContext.availableModels.forEach((m, idx) => {
+          console.log(`   ${idx + 1}. ${m.id} (${m.providerId}) - ${m.capabilities.join(', ')}`)
+        })
+        
         const startTime = Date.now()
         
-        // Call Python router via Tauri command
+        // Call Python router via Tauri command, passing router model and routing configs
         const decision = await invoke('route_request', {
           request: {
             messages: filteredContext.messages,
             threadId: filteredContext.threadId,
             availableModels: filteredContext.availableModels,
+            routerModel: filteredContext.routerModel,
             activeModels: filteredContext.activeModels,
             attachments: filteredContext.attachments,
             preferences: filteredContext.preferences,
+            modelRoutingConfigs: this.modelRoutingConfigs,
           }
         }) as RouteDecision
         
@@ -203,8 +218,9 @@ export default class RouterExtension extends ModelRouterExtension {
         const needsLoading = selectedModel && !selectedModel.metadata.isLoaded
 
         console.log(
-          `[RouterExtension] Python router: ${decision.modelId} (${elapsed}ms) - ${decision.reasoning}${needsLoading ? ' [will be loaded]' : ' [already loaded]'}`
+          `[RouterExtension] Python router selected: ${decision.modelId} (index would be ${filteredContext.availableModels.findIndex(m => m.id === decision.modelId) + 1}) - ${decision.reasoning}${needsLoading ? ' [will be loaded]' : ' [already loaded]'}`
         )
+        console.log(`[RouterExtension] Decision metadata:`, decision.metadata)
 
         this.logRoutingDecision(decision, elapsed, context)
         
@@ -340,30 +356,40 @@ export default class RouterExtension extends ModelRouterExtension {
     return ''
   }
 
-  private parseAllowedModels(allowedModelsStr: string): string[] {
-    if (!allowedModelsStr || allowedModelsStr.trim() === '') {
+  private parseRoutingConfigs(configsStr: string): Array<{id: string, description: string}> {
+    if (!configsStr || configsStr.trim() === '') {
       return []
     }
-    return allowedModelsStr
-      .split(',')
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0)
+    try {
+      const configs = JSON.parse(configsStr)
+      if (!Array.isArray(configs)) {
+        console.warn('[RouterExtension] Invalid routing configs format, expected array:', configsStr)
+        return []
+      }
+      return configs.filter((config) => 
+        config && typeof config.id === 'string' && typeof config.description === 'string'
+      )
+    } catch (error) {
+      console.error('[RouterExtension] Failed to parse routing configs:', error)
+      return []
+    }
   }
 
   private filterAllowedModels(availableModels: any[]): any[] {
-    // If no allowed models configured, return all available models
-    if (this.allowedModels.length === 0) {
+    // If no routing configs configured, return all available models
+    if (this.modelRoutingConfigs.length === 0) {
       return availableModels
     }
 
-    // Filter models to only include those in the allowed list
-    return availableModels.filter((model) => this.allowedModels.includes(model.id))
+    // Filter models to only include those with routing configs
+    const allowedIds = this.modelRoutingConfigs.map(config => config.id)
+    return availableModels.filter((model) => allowedIds.includes(model.id))
   }
 
   onSettingUpdate<T>(key: string, value: T): void {
-    if (key === 'allowed_models') {
-      this.allowedModels = this.parseAllowedModels(value as string)
-      console.log('[RouterExtension] Updated allowed models:', this.allowedModels)
+    if (key === 'model_routing_configs') {
+      this.modelRoutingConfigs = this.parseRoutingConfigs(value as string)
+      console.log('[RouterExtension] Updated model routing configs:', this.modelRoutingConfigs)
     }
   }
 }

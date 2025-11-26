@@ -1,5 +1,7 @@
 import { Model, SettingComponentProps } from '../types'
 import { ModelManager } from './models'
+import { fs } from './fs'
+import { joinPath } from './core'
 
 export enum ExtensionTypeEnum {
   Assistant = 'assistant',
@@ -207,6 +209,8 @@ export abstract class BaseExtension implements ExtensionType {
   async updateSettings(componentProps: Partial<SettingComponentProps>[]): Promise<void> {
     if (!this.name) return
 
+    console.log(`[Extension:${this.name}] updateSettings called with:`, componentProps)
+
     const settings = await this.getSettings()
 
     let updatedSettings = settings.map((setting) => {
@@ -221,7 +225,38 @@ export abstract class BaseExtension implements ExtensionType {
 
     if (!updatedSettings.length) updatedSettings = componentProps as SettingComponentProps[]
 
+    // Save to localStorage (always, for web compatibility)
     localStorage.setItem(this.name, JSON.stringify(updatedSettings))
+    console.log(`[Extension:${this.name}] Settings saved to localStorage`)
+
+    // ALSO save to file system if available (Tauri/desktop mode)
+    try {
+      // Check if fs API is available
+      if (globalThis.core?.api?.writeFileSync) {
+        console.log(`[Extension:${this.name}] File system API available, persisting to settings.json...`)
+        
+        // Build path to extension's settings.json file
+        // Extension URL is like: file://extensions/router-extension/index.js
+        // We want: file://extensions/router-extension/settings.json
+        const settingsPath = await joinPath([this.url.replace(/\/[^\/]+$/, ''), 'settings.json'])
+        
+        console.log(`[Extension:${this.name}] Writing settings to:`, settingsPath)
+        
+        // Convert settings to JSON format matching settings.json structure
+        const settingsJson: Record<string, any> = {}
+        updatedSettings.forEach(setting => {
+          settingsJson[setting.key] = setting.controllerProps.value
+        })
+        
+        await fs.writeFileSync(settingsPath, JSON.stringify(settingsJson, null, 2))
+        console.log(`[Extension:${this.name}] ✅ Settings persisted to settings.json successfully`)
+      } else {
+        console.log(`[Extension:${this.name}] File system API not available (web mode), using localStorage only`)
+      }
+    } catch (error) {
+      console.error(`[Extension:${this.name}] ⚠️  Failed to persist settings to file system:`, error)
+      // Don't throw - localStorage save already succeeded
+    }
 
     updatedSettings.forEach((setting) => {
       this.onSettingUpdate<typeof setting.controllerProps.value>(
