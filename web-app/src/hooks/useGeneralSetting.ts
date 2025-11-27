@@ -7,10 +7,14 @@ type GeneralSettingState = {
   spellCheckChatInput: boolean
   tokenCounterCompact: boolean
   huggingfaceToken?: string
+  allowedDownloadModels?: string
+  downloadOnlyAllowedModels: boolean
   setHuggingfaceToken: (token: string) => void
   setSpellCheckChatInput: (value: boolean) => void
   setTokenCounterCompact: (value: boolean) => void
   setCurrentLanguage: (value: Language) => void
+  setAllowedDownloadModels: (value: string) => void
+  setDownloadOnlyAllowedModels: (value: boolean) => void
 }
 
 export const useGeneralSetting = create<GeneralSettingState>()(
@@ -20,9 +24,13 @@ export const useGeneralSetting = create<GeneralSettingState>()(
       spellCheckChatInput: true,
       tokenCounterCompact: true,
       huggingfaceToken: undefined,
+      allowedDownloadModels: undefined,
+      downloadOnlyAllowedModels: false,
       setSpellCheckChatInput: (value) => set({ spellCheckChatInput: value }),
       setTokenCounterCompact: (value) => set({ tokenCounterCompact: value }),
       setCurrentLanguage: (value) => set({ currentLanguage: value }),
+      setAllowedDownloadModels: (value) => set({ allowedDownloadModels: value }),
+      setDownloadOnlyAllowedModels: (value) => set({ downloadOnlyAllowedModels: value }),
       setHuggingfaceToken: (token) => {
         set({ huggingfaceToken: token })
         ExtensionManager.getInstance()

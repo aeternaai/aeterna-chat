@@ -392,4 +392,12 @@ export default class RouterExtension extends ModelRouterExtension {
       console.log('[RouterExtension] Updated model routing configs:', this.modelRoutingConfigs)
     }
   }
+
+  /**
+   * Get the list of allowed model IDs from routing configs
+   * @returns Array of model IDs that are allowed for routing
+   */
+  getAllowedModelIds(): string[] {
+    return this.modelRoutingConfigs.map(config => config.id)
+  }
 }
