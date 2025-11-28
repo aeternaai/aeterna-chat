@@ -10,6 +10,9 @@ httpx>=0.27.0
 # HTTP/CORS
 python-multipart>=0.0.6
 
+# Structured output generation
+outlines>=0.1.0
+
 # Optional: ML capabilities (for future strategies)
 # numpy>=1.24.0
 # sentence-transformers>=2.2.0

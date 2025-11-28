@@ -64,6 +64,19 @@ class RouteRequest(BaseModel):
         populate_by_name = True
 
 
+class StructuredRouterOutput(BaseModel):
+    """
+    Structured output model for LLM router responses.
+    Used with the 'outlines' library for constrained generation.
+    """
+    model_id: str = Field(
+        description="The exact ID of the selected model from the available models list"
+    )
+    reason: str = Field(
+        description="A brief explanation (1-2 sentences) of why this model was selected for the query"
+    )
+
+
 class RouteResponse(BaseModel):
     """Response with routing decision"""
     model_id: str = Field(alias="modelId")

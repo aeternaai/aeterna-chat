@@ -1,13 +1,13 @@
 """
 LLM-based routing strategy
 Uses a small OpenAI-compatible model to choose the best target model
+with structured output via the 'outlines' library
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
-import re
 from typing import Optional, Any
 
 import httpx
@@ -19,6 +19,7 @@ from models import (
 	Message,
 	Attachments,
 	RoutePreferences,
+	StructuredRouterOutput,
 )
 from strategies.base import RouterStrategy
 from strategies.heuristic import HeuristicRouter
@@ -61,15 +62,42 @@ class LLMRouter(RouterStrategy):
 	async def health_check(self) -> dict[str, Any]:
 		"""Check if the router model is accessible and responding"""
 		try:
-			test_prompt = "Test health check - respond with 'OK'"
+			test_prompt = "Test health check - respond with OK"
 			logger.info("[LLMRouter] Running health check for model '%s'...", self.router_model_id)
-			response = await self._call_router_model(test_prompt)
-			logger.info("[LLMRouter] Health check passed: %s", response[:100])
+			# For health check, we don't need structured output - just verify connectivity
+			# Use a simple test without models list to check basic API access
+			model_id = self.router_model_id
+			
+			payload = {
+				"model": model_id,
+				"messages": [
+					{"role": "user", "content": test_prompt},
+				],
+				"temperature": 0.1,
+				"max_tokens": 10,
+			}
+			
+			headers = {"Content-Type": "application/json"}
+			if self.api_key:
+				headers["Authorization"] = f"Bearer {self.api_key}"
+			
+			url = f"{self.base_url}/chat/completions"
+			
+			async with httpx.AsyncClient(timeout=self.timeout) as client:
+				response = await client.post(url, headers=headers, json=payload)
+				response.raise_for_status()
+				data = response.json()
+			
+			content = ""
+			if isinstance(data, dict) and "choices" in data:
+				content = data["choices"][0]["message"].get("content", "").strip()
+			
+			logger.info("[LLMRouter] Health check passed: %s", content[:100])
 			return {
 				"status": "healthy",
 				"model": self.router_model_id,
 				"base_url": self.base_url,
-				"response": response[:100]
+				"response": content[:100]
 			}
 		except Exception as exc:
 			logger.error("[LLMRouter] Health check failed: %s", exc)
@@ -198,18 +226,19 @@ class LLMRouter(RouterStrategy):
 		logger.debug("[LLMRouter] Response models: %s", [m.id for m in filtered_models])
 
 		try:
-			response_text = await self._call_router_model(prompt, router_model_id)
-			decision = self._parse_router_response(response_text, filtered_models)
+			structured_output = await self._call_router_model(prompt, router_model_id, filtered_models)
+			decision = self._parse_structured_output(structured_output, filtered_models)
 			decision.metadata.update(
 				{
 					"router": "llm",
 					"router_model_used": router_model_id,
 					"llm_prompt_length": len(prompt),
 					"fallback_used": False,
+					"structured_output": True,
 				}
 			)
 			logger.info(
-				"[LLMRouter] ✓ Successfully selected '%s' via LLM router (reasoning: %s)",
+				"[LLMRouter] ✓ Successfully selected '%s' via LLM router (reason: %s)",
 				decision.model_id,
 				decision.reasoning[:100]
 			)
@@ -399,9 +428,45 @@ class LLMRouter(RouterStrategy):
 		
 		return filtered
 
-	async def _call_router_model(self, prompt: str, router_model_id: Optional[str] = None) -> str:
+	async def _call_router_model(self, prompt: str, router_model_id: Optional[str] = None, models: Optional[list[AvailableModel]] = None) -> StructuredRouterOutput:
+		"""
+		Call the router model with structured output using JSON schema.
+		
+		Uses the OpenAI-compatible response_format parameter to enforce
+		structured JSON output from the LLM.
+		
+		Args:
+			prompt: The routing prompt
+			router_model_id: Optional model ID override
+			models: List of available models (used for enum constraint)
+			
+		Returns:
+			StructuredRouterOutput with model_id and reason
+		"""
 		# Use provided router_model_id or fall back to instance default
 		model_id = router_model_id or self.router_model_id
+		
+		# Build JSON schema with enum constraint for model_id
+		model_ids = [m.id for m in models] if models else []
+		json_schema = {
+			"type": "object",
+			"properties": {
+				"model_id": {
+					"type": "string",
+					"description": "The exact ID of the selected model",
+				},
+				"reason": {
+					"type": "string", 
+					"description": "A brief explanation (1-2 sentences) of why this model was selected"
+				}
+			},
+			"required": ["model_id", "reason"],
+			"additionalProperties": False
+		}
+		
+		# Add enum constraint if we have model IDs
+		if model_ids:
+			json_schema["properties"]["model_id"]["enum"] = model_ids
 		
 		payload = {
 			"model": model_id,
@@ -410,8 +475,9 @@ class LLMRouter(RouterStrategy):
 					"role": "system",
 					"content": (
 						"You are an expert model routing assistant. "
-						"Analyze the query and respond with ONLY the model ID of the best model. "
-						"Return just the model ID, nothing else."
+						"Analyze the query and select the best model from the available options. "
+						"Respond with a JSON object containing 'model_id' (the exact model ID) "
+						"and 'reason' (a brief explanation of your choice)."
 					),
 				},
 				{
@@ -421,6 +487,14 @@ class LLMRouter(RouterStrategy):
 			],
 			"temperature": self.temperature,
 			"max_tokens": self.max_tokens,
+			"response_format": {
+				"type": "json_schema",
+				"json_schema": {
+					"name": "router_decision",
+					"strict": True,
+					"schema": json_schema
+				}
+			}
 		}
 
 		headers = {"Content-Type": "application/json"}
@@ -429,13 +503,12 @@ class LLMRouter(RouterStrategy):
 
 		url = f"{self.base_url}/chat/completions"
 		logger.info(
-			"[LLMRouter] → API Request: POST %s (model='%s', timeout=%ss, api_key=%s)",
+			"[LLMRouter] → API Request: POST %s (model='%s', timeout=%ss, structured_output=True)",
 			url,
 			model_id,
 			self.timeout,
-			"✓ set" if self.api_key else "✗ NOT SET",
 		)
-		logger.debug("[LLMRouter] Request payload: %s", json.dumps(payload, indent=2))
+		logger.debug("[LLMRouter] Request payload with JSON schema: %s", json.dumps(payload, indent=2))
 
 		try:
 			async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -478,15 +551,40 @@ class LLMRouter(RouterStrategy):
 			)
 			raise
 
-		# Non-streaming responses contain choices
+		# Extract content from response
+		content = ""
 		if isinstance(data, dict) and "choices" in data:
 			content = data["choices"][0]["message"].get("content", "").strip()
-			logger.debug("[LLMRouter] Extracted content from choices: '%s'", content[:200])
-			return content
+			logger.debug("[LLMRouter] Extracted content: '%s'", content[:500])
+		else:
+			logger.warning("[LLMRouter] Response missing 'choices', attempting to parse full payload")
+			content = json.dumps(data)
 
-		# Otherwise attempt to stringify entire payload
-		logger.warning("[LLMRouter] Response missing 'choices', stringifying full payload")
-		return json.dumps(data)
+		# Parse the structured JSON response
+		try:
+			parsed = json.loads(content)
+			structured_output = StructuredRouterOutput(
+				model_id=parsed.get("model_id", ""),
+				reason=parsed.get("reason", "No reason provided")
+			)
+			logger.info(
+				"[LLMRouter] ✓ Parsed structured output: model_id='%s', reason='%s'",
+				structured_output.model_id,
+				structured_output.reason[:100]
+			)
+			return structured_output
+		except json.JSONDecodeError as exc:
+			logger.error("[LLMRouter] Failed to parse JSON response: %s (content: %s)", exc, content[:200])
+			# Fallback: try to extract model_id from raw text
+			if models:
+				for model in models:
+					if model.id in content:
+						logger.warning("[LLMRouter] Fallback: extracted model_id '%s' from raw text", model.id)
+						return StructuredRouterOutput(
+							model_id=model.id,
+							reason="Extracted from unstructured response"
+						)
+			raise ValueError(f"Failed to parse structured router response: {content[:200]}")
 
 	def _build_routing_prompt(
 		self,
@@ -560,9 +658,9 @@ class LLMRouter(RouterStrategy):
 			"1. You are a helpful assistant that routes user queries to the appropriate model.\n"
 			"2. Choose the model whose description best matches the query's requirements\n"
 			"3. If the user explicitly requests a specific model by name, select that model\n\n"
-			"Respond with ONLY the Model ID of the best model. Just the Model ID, nothing else.\n"
-			"Example: Qwen3-VL-8B-Instruct-IQ4_XS\n"
-			"Example: gemma-3n-E4B-it-IQ4_XS"
+			"Respond with a JSON object containing:\n"
+			"- \"model_id\": The exact Model ID of the best model (must be one from the list above)\n"
+			"- \"reason\": A brief explanation (1-2 sentences) of why you selected this model"
 		).format(query, attachment_text, preference_text, "\n\n".join(model_lines))
 		
 		logger.info("[LLMRouter] Built prompt with %d models and routing descriptions", len(models))
@@ -570,62 +668,77 @@ class LLMRouter(RouterStrategy):
 		
 		return prompt
 
-	def _parse_router_response(
+	def _parse_structured_output(
 		self,
-		response_text: str,
+		structured_output: StructuredRouterOutput,
 		models: list[AvailableModel],
 	) -> RouteResponse:
-		text = response_text.strip()
-		logger.info("[LLMRouter] Parsing router response: '%s'", text)
+		"""
+		Parse the structured output from the LLM router into a RouteResponse.
+		
+		Args:
+			structured_output: The validated structured output from the LLM
+			models: List of available models to validate against
+			
+		Returns:
+			RouteResponse with selected model and reasoning
+		"""
+		model_id = structured_output.model_id.strip()
+		reason = structured_output.reason.strip()
+		
+		logger.info("[LLMRouter] Processing structured output: model_id='%s', reason='%s'", model_id, reason[:100])
 
 		# Build a map of model IDs for lookup
 		model_map = {model.id: model for model in models}
 		
-		# Try to match the response text to a model ID
+		# Try to match the model_id to an available model
 		selected: Optional[AvailableModel] = None
 		
 		# First, try exact match
-		if text in model_map:
-			selected = model_map[text]
-			logger.info("[LLMRouter] Exact match found for model ID: '%s'", text)
+		if model_id in model_map:
+			selected = model_map[model_id]
+			logger.info("[LLMRouter] Exact match found for model ID: '%s'", model_id)
 		else:
 			# Try case-insensitive match
-			text_lower = text.lower()
-			for model_id, model in model_map.items():
-				if model_id.lower() == text_lower:
+			model_id_lower = model_id.lower()
+			for mid, model in model_map.items():
+				if mid.lower() == model_id_lower:
 					selected = model
-					logger.info("[LLMRouter] Case-insensitive match found: '%s' -> '%s'", text, model_id)
+					logger.info("[LLMRouter] Case-insensitive match found: '%s' -> '%s'", model_id, mid)
 					break
 			
-			# If still not found, try partial match (response contains model ID)
+			# If still not found, try partial match
 			if not selected:
-				for model_id, model in model_map.items():
-					if model_id in text or model_id.lower() in text_lower:
+				for mid, model in model_map.items():
+					if mid in model_id or mid.lower() in model_id_lower:
 						selected = model
-						logger.info("[LLMRouter] Partial match found: '%s' contains '%s'", text, model_id)
+						logger.info("[LLMRouter] Partial match found: '%s' contains '%s'", model_id, mid)
 						break
 		
 		# Fallback to first model if no match found
 		if not selected:
 			logger.warning(
-				"[LLMRouter] Could not match response '%s' to any model ID, defaulting to first model",
-				text,
+				"[LLMRouter] Could not match model_id '%s' to any available model, defaulting to first model",
+				model_id,
 			)
 			selected = models[0]
+			reason = f"Fallback selection (requested '{model_id}' not found): {reason}"
 
 		logger.info(
-			"[LLMRouter] Final selection: '%s' (provider: %s)",
+			"[LLMRouter] Final selection: '%s' (provider: %s, reason: %s)",
 			selected.id,
-			selected.provider_id
+			selected.provider_id,
+			reason[:100]
 		)
 
 		return RouteResponse(
 			modelId=selected.id,
 			providerId=selected.provider_id,
 			confidence=0.85,
-			reasoning="no reason",
+			reasoning=reason,
 			metadata={
-				"router_response": text,
+				"router_model_id": model_id,
+				"structured_output": True,
 			},
 		)
 
