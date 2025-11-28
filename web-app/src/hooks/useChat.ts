@@ -45,8 +45,36 @@ import { toast } from 'sonner'
 import { Attachment } from '@/types/attachment'
 import { MCPTool } from '@/types/completion'
 import { RouterManager } from '@janhq/core'
-import type { AvailableModel, ChatCompletionMessage } from '@janhq/core'
-import { ChatCompletionRole } from '@janhq/core'
+import type { 
+  AvailableModel, 
+  ChatCompletionMessage,
+  ChatCompletionMessageContentText,
+  ChatCompletionMessageContentImage,
+  ChatCompletionMessageContentDoc,
+} from '@janhq/core'
+import { ChatCompletionRole, ChatCompletionMessageContentType } from '@janhq/core'
+import { invoke } from '@tauri-apps/api/core'
+
+// Default router model ID (can be overridden via Tauri config)
+let ROUTER_MODEL_ID = 'Phi-4-mini-instruct_Q4_K_M'
+
+// Load router model ID from Tauri config
+const loadRouterModelId = async (): Promise<string> => {
+  try {
+    const savedRouterModel = await invoke<string | null>('get_router_model_config')
+    if (savedRouterModel) {
+      ROUTER_MODEL_ID = savedRouterModel
+      console.log('[useChat] Loaded router model from config:', savedRouterModel)
+      return savedRouterModel
+    }
+  } catch (error) {
+    console.warn('[useChat] Failed to load router model config, using default:', error)
+  }
+  return ROUTER_MODEL_ID
+}
+
+// Initialize router model ID
+loadRouterModelId()
 
 // Helper to infer model capabilities from model metadata
 const inferCapabilities = (model: Model): string[] => {
@@ -75,8 +103,6 @@ const inferCapabilities = (model: Model): string[] => {
 }
 
 // Helper to build available models array from providers
-const ROUTER_MODEL_ID = 'Phi-4-mini-instruct_Q4_K_M'
-
 const buildAvailableModels = (
   providers: ModelProvider[],
   activeModelIds: string[] = [],
@@ -799,14 +825,58 @@ export const useChat = () => {
               return
             }
             
-            // Build messages for routing context
+            // Build messages for routing context - preserve multimodal content structure
             const routingMessages: ChatCompletionMessage[] = [
-              ...messages.map(m => ({
-                role: m.role === 'user' ? ChatCompletionRole.User : 
+              ...messages.map(m => {
+                const role = m.role === 'user' ? ChatCompletionRole.User : 
                       m.role === 'assistant' ? ChatCompletionRole.Assistant :
-                      ChatCompletionRole.System,
-                content: m.content?.[0]?.text?.value || '',
-              })),
+                      ChatCompletionRole.System
+                
+                // For multimodal messages, preserve the content structure
+                // so the router can detect images/documents in conversation history
+                if (Array.isArray(m.content) && m.content.length > 0) {
+                  // Check if this message has multimodal content (images)
+                  // ContentType.Image = 'image_url'
+                  const hasMultimodal = m.content.some(part => 
+                    part.type === ContentType.Image || part.image_url
+                  )
+                  
+                  if (hasMultimodal) {
+                    // Preserve the full content structure for the router to analyze
+                    const contentArray: (ChatCompletionMessageContentText & ChatCompletionMessageContentImage & ChatCompletionMessageContentDoc)[] = m.content.map(part => {
+                      if (part.type === ContentType.Text || part.text) {
+                        return { 
+                          type: ChatCompletionMessageContentType.Text, 
+                          text: part.text?.value || '',
+                          image_url: { url: '' },
+                          doc_url: { url: '' },
+                        }
+                      }
+                      if (part.type === ContentType.Image || part.image_url) {
+                        return { 
+                          type: ChatCompletionMessageContentType.Image, 
+                          text: '',
+                          image_url: { url: part.image_url?.url || '' },
+                          doc_url: { url: '' },
+                        }
+                      }
+                      return { 
+                        type: ChatCompletionMessageContentType.Text, 
+                        text: '',
+                        image_url: { url: '' },
+                        doc_url: { url: '' },
+                      }
+                    })
+                    return { role, content: contentArray }
+                  }
+                }
+                
+                // Single text content or non-multimodal
+                return {
+                  role,
+                  content: m.content?.[0]?.text?.value || '',
+                }
+              }),
               { role: ChatCompletionRole.User, content: message },
             ]
             

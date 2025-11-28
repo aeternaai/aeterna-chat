@@ -235,3 +235,29 @@ pub async fn configure_router_llm(
     log::info!("Updated Python router LLM configuration");
     Ok(())
 }
+
+/// Get the current router model configuration
+#[tauri::command]
+pub async fn get_router_model_config(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    let config = state.router_config.lock().await;
+    Ok(config.router_model.clone())
+}
+
+/// Set the router model configuration
+#[tauri::command]
+pub async fn set_router_model_config(
+    state: State<'_, AppState>,
+    router_model: Option<String>,
+) -> Result<(), String> {
+    {
+        let mut config = state.router_config.lock().await;
+        config.router_model = router_model.clone();
+    }
+    
+    log::info!(
+        "Updated router model configuration to: {}",
+        router_model.as_deref().unwrap_or("none")
+    );
+    
+    Ok(())
+}

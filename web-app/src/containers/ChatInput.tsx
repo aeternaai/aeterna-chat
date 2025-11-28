@@ -702,8 +702,8 @@ const ChatInput = ({
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    // Only allow drag if model supports mmproj
-    if (hasMmproj) {
+    // Allow drag if model supports mmproj OR routing is enabled
+    if (hasMmproj || routingEnabled) {
       setIsDragOver(true)
     }
   }
@@ -723,7 +723,7 @@ const ChatInput = ({
     e.preventDefault()
     e.stopPropagation()
     // Ensure drag state is maintained during drag over
-    if (hasMmproj) {
+    if (hasMmproj || routingEnabled) {
       setIsDragOver(true)
     }
   }
@@ -733,8 +733,8 @@ const ChatInput = ({
     e.stopPropagation()
     setIsDragOver(false)
 
-    // Only allow drop if model supports mmproj
-    if (!hasMmproj) {
+    // Allow drop if model supports mmproj OR routing is enabled
+    if (!hasMmproj && !routingEnabled) {
       return
     }
 
@@ -758,8 +758,8 @@ const ChatInput = ({
   }
 
   const handlePaste = async (e: React.ClipboardEvent) => {
-    // Only process images if model supports mmproj
-    if (hasMmproj) {
+    // Process images if model supports mmproj OR routing is enabled
+    if (hasMmproj || routingEnabled) {
       const clipboardItems = e.clipboardData?.items
       let hasProcessedImage = false
 
@@ -889,11 +889,11 @@ const ChatInput = ({
               isFocused && 'ring-1 ring-main-view-fg/10',
               isDragOver && 'ring-2 ring-accent border-accent'
             )}
-            data-drop-zone={hasMmproj ? 'true' : undefined}
-            onDragEnter={hasMmproj ? handleDragEnter : undefined}
-            onDragLeave={hasMmproj ? handleDragLeave : undefined}
-            onDragOver={hasMmproj ? handleDragOver : undefined}
-            onDrop={hasMmproj ? handleDrop : undefined}
+            data-drop-zone={(hasMmproj || routingEnabled) ? 'true' : undefined}
+            onDragEnter={(hasMmproj || routingEnabled) ? handleDragEnter : undefined}
+            onDragLeave={(hasMmproj || routingEnabled) ? handleDragLeave : undefined}
+            onDragOver={(hasMmproj || routingEnabled) ? handleDragOver : undefined}
+            onDrop={(hasMmproj || routingEnabled) ? handleDrop : undefined}
           >
             {attachments.length > 0 && (
               <div className="flex gap-3 items-center p-2 pb-0">
@@ -1056,8 +1056,8 @@ const ChatInput = ({
                     useLastUsedModel={initialMessage}
                   />
                 )}
-                {/* Vision image attachment - show only for models with mmproj */}
-                {hasMmproj && (
+                {/* Vision image attachment - show for models with mmproj OR when routing is enabled */}
+                {(hasMmproj || routingEnabled) && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1084,8 +1084,8 @@ const ChatInput = ({
                     </Tooltip>
                   </TooltipProvider>
                 )}
-                {/* RAG document attachments - desktop-only via dialog; shown when feature enabled */}
-                {selectedModel?.capabilities?.includes('tools') &&
+                {/* RAG document attachments - desktop-only via dialog; shown when feature enabled OR routing is enabled */}
+                {(selectedModel?.capabilities?.includes('tools') || routingEnabled) &&
                   showAttachmentButton && (
                     <TooltipProvider>
                       <Tooltip>
@@ -1121,7 +1121,8 @@ const ChatInput = ({
                 {/* <div className="h-7 p-1 flex items-center justify-center rounded-sm hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out gap-1">
                 <IconMicrophone size={18} className="text-main-view-fg/50" />
               </div> */}
-                {selectedModel?.capabilities?.includes('embeddings') && (
+                {/* Embeddings - show when model supports OR routing is enabled */}
+                {(selectedModel?.capabilities?.includes('embeddings') || routingEnabled) && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1139,7 +1140,8 @@ const ChatInput = ({
                   </TooltipProvider>
                 )}
 
-                {selectedModel?.capabilities?.includes('tools') &&
+                {/* Tools - show when model supports OR routing is enabled */}
+                {(selectedModel?.capabilities?.includes('tools') || routingEnabled) &&
                   hasActiveMCPServers &&
                   (MCPToolComponent ? (
                     // Use custom MCP component
@@ -1147,7 +1149,7 @@ const ChatInput = ({
                       tools={tools}
                       hasActiveMCPServers={hasActiveMCPServers}
                       selectedModelHasTools={
-                        selectedModel?.capabilities?.includes('tools') ?? false
+                        (selectedModel?.capabilities?.includes('tools') ?? false) || routingEnabled
                       }
                       initialMessage={initialMessage}
                       MCPToolComponent={MCPToolComponent}
@@ -1209,7 +1211,8 @@ const ChatInput = ({
                       </Tooltip>
                     </TooltipProvider>
                   ))}
-                {selectedModel?.capabilities?.includes('web_search') && (
+                {/* Web Search - show when model supports OR routing is enabled */}
+                {(selectedModel?.capabilities?.includes('web_search') || routingEnabled) && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1226,7 +1229,8 @@ const ChatInput = ({
                     </Tooltip>
                   </TooltipProvider>
                 )}
-                {selectedModel?.capabilities?.includes('reasoning') && (
+                {/* Reasoning - show when model supports OR routing is enabled */}
+                {(selectedModel?.capabilities?.includes('reasoning') || routingEnabled) && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>

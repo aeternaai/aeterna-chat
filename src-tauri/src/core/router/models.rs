@@ -15,6 +15,9 @@ pub struct RouterConfig {
     
     /// Path to Python executable (optional, will use system python if not set)
     pub python_path: Option<String>,
+    
+    /// Router model ID for LLM-based routing (optional, defaults to Phi-4-mini-instruct_Q4_K_M)
+    pub router_model: Option<String>,
 }
 
 impl Default for RouterConfig {
@@ -24,6 +27,7 @@ impl Default for RouterConfig {
             port: 8765,
             log_level: "info".to_string(),
             python_path: None,
+            router_model: Some("Phi-4-mini-instruct_Q4_K_M".to_string()),
         }
     }
 }

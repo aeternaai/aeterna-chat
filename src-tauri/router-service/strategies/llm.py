@@ -131,11 +131,18 @@ class LLMRouter(RouterStrategy):
 
 		query = self._get_message_content(request.messages[-1])
 		
-		# Log router model info
-		router_model_info = "none"
-		if request.router_model:
-			router_model_info = f"{request.router_model.id} ({'loaded' if request.router_model.metadata.is_loaded else 'not loaded'})"
-		logger.info("[LLMRouter] Router model: %s", router_model_info)
+		# Determine which router model to use
+		# Priority: 1) request.router_model.id  2) self.router_model_id (config/env)
+		router_model_id = self.router_model_id
+		if request.router_model and request.router_model.id:
+			router_model_id = request.router_model.id
+			logger.info(
+				"[LLMRouter] Using router model from request: '%s' (loaded: %s)",
+				router_model_id,
+				request.router_model.metadata.is_loaded
+			)
+		else:
+			logger.info("[LLMRouter] Using default router model: '%s'", router_model_id)
 		
 		# Debug: Log model_routing_configs received in request
 		logger.info("[LLMRouter] RouteRequest.model_routing_configs: %s", request.model_routing_configs)
@@ -146,33 +153,57 @@ class LLMRouter(RouterStrategy):
 		
 		# Ensure router model is not in available models list
 		available_model_ids = [m.id for m in request.available_models]
-		if request.router_model and request.router_model.id in available_model_ids:
+		if router_model_id in available_model_ids:
 			logger.warning(
 				"[LLMRouter] ⚠️  Router model '%s' found in available models list - this should not happen!",
-				request.router_model.id
+				router_model_id
 			)
+		
+		# Filter models based on user's input types (attachments and conversation history)
+		filtered_models = self._filter_models_by_attachments(
+			request.available_models, 
+			request.attachments,
+			request.messages,  # Pass entire conversation for multimodal analysis
+		)
+		
+		if not filtered_models:
+			logger.warning(
+				"[LLMRouter] ⚠️  No models match the required capabilities for attachments: %s. Using all models.",
+				request.attachments
+			)
+			filtered_models = request.available_models
+		
+		logger.info(
+			"[LLMRouter] Filtered models: %d -> %d (based on attachments: images=%d, documents=%d)",
+			len(request.available_models),
+			len(filtered_models),
+			request.attachments.images if request.attachments else 0,
+			request.attachments.documents if request.attachments else 0
+		)
 		
 		prompt = self._build_routing_prompt(
 			query=query,
-			models=request.available_models,
+			models=filtered_models,
 			model_routing_configs=request.model_routing_configs,
 			attachments=request.attachments,
 			preferences=request.preferences,
 		)
 
 		logger.info(
-			"[LLMRouter] Starting route() with %d response models (query chars=%d)",
-			len(request.available_models),
+			"[LLMRouter] Starting route() with %d response models (query chars=%d, router_model=%s)",
+			len(filtered_models),
 			len(query),
+			router_model_id
 		)
-		logger.debug("[LLMRouter] Response models: %s", [m.id for m in request.available_models])
+		logger.debug("[LLMRouter] Response models: %s", [m.id for m in filtered_models])
 
 		try:
-			response_text = await self._call_router_model(prompt)
-			decision = self._parse_router_response(response_text, request.available_models)
+			response_text = await self._call_router_model(prompt, router_model_id)
+			decision = self._parse_router_response(response_text, filtered_models)
 			decision.metadata.update(
 				{
 					"router": "llm",
+					"router_model_used": router_model_id,
 					"llm_prompt_length": len(prompt),
 					"fallback_used": False,
 				}
@@ -218,9 +249,162 @@ class LLMRouter(RouterStrategy):
 	# ------------------------------------------------------------------
 	# Helpers
 	# ------------------------------------------------------------------
-	async def _call_router_model(self, prompt: str) -> str:
+	def _detect_multimodal_content_in_messages(
+		self,
+		messages: list[Message],
+	) -> dict[str, bool]:
+		"""
+		Analyze the entire conversation history for multimodal content.
+		
+		Returns a dict with:
+		- has_images: True if any message contains image content
+		- has_documents: True if any message references documents
+		- has_code: True if any message contains code blocks
+		"""
+		has_images = False
+		has_documents = False
+		has_code = False
+		
+		logger.info("[LLMRouter] Analyzing %d messages for multimodal content", len(messages))
+		
+		for idx, message in enumerate(messages):
+			content = message.content
+			logger.debug("[LLMRouter] Message %d content type: %s", idx, type(content).__name__)
+			
+			# Handle list content (multimodal messages)
+			if isinstance(content, list):
+				logger.debug("[LLMRouter] Message %d has %d content parts", idx, len(content))
+				for part_idx, item in enumerate(content):
+					if isinstance(item, dict):
+						item_type = item.get("type", "")
+						logger.debug("[LLMRouter] Message %d, part %d: type='%s', keys=%s", idx, part_idx, item_type, list(item.keys()))
+						
+						# Check for image content - type can be 'image_url' or 'image'
+						# Also check if image_url field exists with a URL
+						if item_type == "image_url" or item_type == "image":
+							has_images = True
+							logger.info("[LLMRouter] ✓ Found image in message %d (type=%s)", idx, item_type)
+						elif "image_url" in item and item.get("image_url", {}).get("url"):
+							has_images = True
+							logger.info("[LLMRouter] ✓ Found image_url field in message %d", idx)
+						
+						# Check for file/document references
+						if item_type in ("file", "document", "doc_url"):
+							has_documents = True
+							logger.info("[LLMRouter] ✓ Found document in message %d (type=%s)", idx, item_type)
+			
+			# Handle string content - check for code blocks
+			elif isinstance(content, str):
+				if "```" in content:
+					has_code = True
+		
+		logger.info(
+			"[LLMRouter] Multimodal detection complete: images=%s, documents=%s, code=%s",
+			has_images, has_documents, has_code
+		)
+		
+		return {
+			"has_images": has_images,
+			"has_documents": has_documents,
+			"has_code": has_code,
+		}
+
+	def _filter_models_by_attachments(
+		self,
+		models: list[AvailableModel],
+		attachments: Optional[Attachments],
+		messages: Optional[list[Message]] = None,
+	) -> list[AvailableModel]:
+		"""
+		Filter available models based on user's input types.
+		
+		This considers:
+		1. Current attachments (images, documents from the new message)
+		2. Historical multimodal content in the conversation (from messages)
+		
+		If any message in the conversation contains images, only return models 
+		with 'vision' capability. This ensures continuity - if a user discussed
+		an image earlier, the model must still be able to reference it.
+		
+		If documents are attached, only return models with 'tools' capability
+		(for RAG/document processing).
+		"""
+		# Analyze conversation history for multimodal content
+		conversation_content = {"has_images": False, "has_documents": False, "has_code": False}
+		if messages:
+			conversation_content = self._detect_multimodal_content_in_messages(messages)
+			logger.info(
+				"[LLMRouter] Conversation analysis: images=%s, documents=%s, code=%s",
+				conversation_content["has_images"],
+				conversation_content["has_documents"],
+				conversation_content["has_code"],
+			)
+		
+		# Combine current attachments with conversation history
+		needs_vision = (
+			(attachments and attachments.images > 0) or 
+			conversation_content["has_images"]
+		)
+		needs_tools = (
+			(attachments and attachments.documents > 0) or 
+			conversation_content["has_documents"]
+		)
+		
+		if not needs_vision and not needs_tools:
+			logger.info("[LLMRouter] No multimodal requirements detected, using all models")
+			return models
+		
+		filtered = models
+		
+		# Filter for vision capability if images are present (current or historical)
+		if needs_vision:
+			vision_models = [m for m in filtered if 'vision' in m.capabilities]
+			if vision_models:
+				logger.info(
+					"[LLMRouter] Filtered for vision capability: %d -> %d models (current_images=%d, history_has_images=%s)",
+					len(filtered),
+					len(vision_models),
+					attachments.images if attachments else 0,
+					conversation_content["has_images"],
+				)
+				filtered = vision_models
+			else:
+				logger.warning(
+					"[LLMRouter] ⚠️  Conversation requires vision but no models with 'vision' capability found"
+				)
+		
+		# Filter for tools capability if documents are present (current or historical)
+		if needs_tools:
+			tools_models = [m for m in filtered if 'tools' in m.capabilities]
+			if tools_models:
+				logger.info(
+					"[LLMRouter] Filtered for tools capability (RAG): %d -> %d models (current_docs=%d, history_has_docs=%s)",
+					len(filtered),
+					len(tools_models),
+					attachments.documents if attachments else 0,
+					conversation_content["has_documents"],
+				)
+				filtered = tools_models
+			else:
+				logger.warning(
+					"[LLMRouter] ⚠️  Conversation requires tools but no models with 'tools' capability found"
+				)
+		
+		# Log final filtered list
+		if filtered != models:
+			logger.info(
+				"[LLMRouter] Models after multimodal filtering: %s",
+				[m.id for m in filtered]
+			)
+		
+		return filtered
+
+	async def _call_router_model(self, prompt: str, router_model_id: Optional[str] = None) -> str:
+		# Use provided router_model_id or fall back to instance default
+		model_id = router_model_id or self.router_model_id
+		
 		payload = {
-			"model": self.router_model_id,
+			"model": model_id,
 			"messages": [
 				{
 					"role": "system",
@@ -247,7 +431,7 @@ class LLMRouter(RouterStrategy):
 		logger.info(
 			"[LLMRouter] → API Request: POST %s (model='%s', timeout=%ss, api_key=%s)",
 			url,
-			self.router_model_id,
+			model_id,
 			self.timeout,
 			"✓ set" if self.api_key else "✗ NOT SET",
 		)

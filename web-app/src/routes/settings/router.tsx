@@ -5,8 +5,10 @@ import HeaderPage from '@/containers/HeaderPage'
 import { useCallback, useEffect, useState } from 'react'
 import { RouterManager } from '@janhq/core'
 import { useAppState } from '@/hooks/useAppState'
+import { useModelProvider } from '@/hooks/useModelProvider'
 import { Switch } from '@/components/ui/switch'
 import { Card, CardItem } from '@/containers/Card'
+import { invoke } from '@tauri-apps/api/core'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute(route.settings.router as any)({
@@ -28,8 +30,14 @@ function RouterSettings() {
   const [routingConfigs, setRoutingConfigs] = useState<ModelRoutingConfig[]>([])
   const [editingConfigIndex, setEditingConfigIndex] = useState<number | null>(null)
   const [newConfig, setNewConfig] = useState<ModelRoutingConfig>({ id: '', description: '' })
+  const [routerModel, setRouterModel] = useState<string>('')
   const routingEnabled = useAppState((state) => state.routingEnabled)
   const setRoutingEnabled = useAppState((state) => state.setRoutingEnabled)
+  const getProviderByName = useModelProvider((state) => state.getProviderByName)
+  
+  // Get downloaded models from llamacpp provider
+  const llamacppProvider = getProviderByName('llamacpp')
+  const downloadedModels = llamacppProvider?.models || []
 
   useEffect(() => {
     loadRouterSettings()
@@ -38,6 +46,18 @@ function RouterSettings() {
   const loadRouterSettings = useCallback(async () => {
     try {
       console.log('[Router Settings] Attempting to load router...')
+      
+      // Load router model from Tauri
+      try {
+        const savedRouterModel = await invoke<string | null>('get_router_model_config')
+        if (savedRouterModel) {
+          setRouterModel(savedRouterModel)
+          console.log('[Router Settings] Loaded router model:', savedRouterModel)
+        }
+      } catch (error) {
+        console.error('[Router Settings] Failed to load router model:', error)
+      }
+      
       const routerManager = RouterManager.instance()
       console.log('[Router Settings] RouterManager instance:', routerManager)
       
@@ -156,6 +176,19 @@ function RouterSettings() {
   const handleToggleRouting = useCallback(() => {
     setRoutingEnabled(!routingEnabled)
   }, [routingEnabled, setRoutingEnabled])
+
+  const handleRouterModelChange = useCallback(
+    async (modelId: string) => {
+      setRouterModel(modelId)
+      try {
+        await invoke('set_router_model_config', { routerModel: modelId || null })
+        console.log('[Router Settings] Updated router model:', modelId)
+      } catch (error) {
+        console.error('[Router Settings] Failed to save router model:', error)
+      }
+    },
+    []
+  )
 
   const handleAllowedModelsChange = useCallback(
     async (value: string) => {
@@ -353,6 +386,37 @@ function RouterSettings() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </Card>
+
+            {/* Router Model Selection (for LLM-based strategy) */}
+            <Card title="Router Model">
+              <CardItem
+                title="LLM Router Model"
+                description="Select which model to use for LLM-based routing. This model analyzes your query to decide which response model to use. Smaller, faster models work best."
+                className="flex-col items-start gap-y-2"
+              />
+              <div className="px-4 pb-4">
+                <select
+                  value={routerModel}
+                  onChange={(e) => handleRouterModelChange(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-main-view-fg/10 rounded-lg bg-transparent text-main-view-fg focus:outline-none focus:border-primary"
+                >
+                  <option value="">-- Select Router Model --</option>
+                  {downloadedModels.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.id}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-main-view-fg/60 mt-2">
+                  The router model is used only for the LLM-based routing strategy. It should be a small, fast model like Phi-4-mini.
+                  {routerModel && (
+                    <span className="block mt-1 text-primary">
+                      Current: {routerModel}
+                    </span>
+                  )}
+                </p>
               </div>
             </Card>
 
