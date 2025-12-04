@@ -51,6 +51,7 @@ import type {
   ChatCompletionMessageContentText,
   ChatCompletionMessageContentImage,
   ChatCompletionMessageContentDoc,
+  RouteDecision,
 } from '@janhq/core'
 import { ChatCompletionRole, ChatCompletionMessageContentType } from '@janhq/core'
 import { invoke } from '@tauri-apps/api/core'
@@ -799,6 +800,9 @@ export const useChat = () => {
       const routingEnabled = useAppState.getState().routingEnabled
       let selectedModel = useModelProvider.getState().selectedModel
       let targetProvider = selectedProvider
+      
+      // Store routing decision for metadata
+      let routeDecision: RouteDecision | null = null
 
       // Apply routing if enabled
       if (routingEnabled && !continueFromMessageId) {
@@ -880,7 +884,7 @@ export const useChat = () => {
               { role: ChatCompletionRole.User, content: message },
             ]
             
-            const routeDecision = await router.route({
+            routeDecision = await router.route({
               messages: routingMessages,
               threadId: activeThread.id,
               availableModels,
@@ -897,11 +901,12 @@ export const useChat = () => {
 
             // Update target model and provider based on routing decision
             if (routeDecision) {
+              const decision = routeDecision // Capture for closure
               const routedModel = providers
                 .flatMap(p => p.models.map(m => ({ model: m, provider: p.provider })))
                 .find(item => 
-                  item.model.id === routeDecision.modelId && 
-                  item.provider === routeDecision.providerId
+                  item.model.id === decision.modelId && 
+                  item.provider === decision.providerId
                 )
 
               if (routedModel) {
@@ -1231,6 +1236,15 @@ export const useChat = () => {
               tokenSpeed: useAppState.getState().tokenSpeed,
               assistant: currentAssistant,
               modelId: selectedModel?.id,
+              // Include routing decision if available
+              ...(routeDecision && {
+                routingDecision: {
+                  modelId: routeDecision.modelId,
+                  providerId: routeDecision.providerId,
+                  confidence: routeDecision.confidence,
+                  reasoning: routeDecision.reasoning,
+                },
+              }),
             }
           )
 
@@ -1318,6 +1332,15 @@ export const useChat = () => {
                 tokenSpeed: useAppState.getState().tokenSpeed,
                 assistant: currentAssistant,
                 modelId: selectedModel?.id,
+                // Include routing decision if available
+                ...(routeDecision && {
+                  routingDecision: {
+                    modelId: routeDecision.modelId,
+                    providerId: routeDecision.providerId,
+                    confidence: routeDecision.confidence,
+                    reasoning: routeDecision.reasoning,
+                  },
+                }),
               },
             })
           } else {
@@ -1330,6 +1353,15 @@ export const useChat = () => {
                   tokenSpeed: useAppState.getState().tokenSpeed,
                   assistant: currentAssistant,
                   modelId: selectedModel?.id,
+                  // Include routing decision if available
+                  ...(routeDecision && {
+                    routingDecision: {
+                      modelId: routeDecision.modelId,
+                      providerId: routeDecision.providerId,
+                      confidence: routeDecision.confidence,
+                      reasoning: routeDecision.reasoning,
+                    },
+                  }),
                 }
               ),
               status: MessageStatus.Stopped,
@@ -1377,6 +1409,15 @@ export const useChat = () => {
                 tokenSpeed: useAppState.getState().tokenSpeed,
                 assistant: currentAssistant,
                 modelId: selectedModel?.id,
+                // Include routing decision if available
+                ...(routeDecision && {
+                  routingDecision: {
+                    modelId: routeDecision.modelId,
+                    providerId: routeDecision.providerId,
+                    confidence: routeDecision.confidence,
+                    reasoning: routeDecision.reasoning,
+                  },
+                }),
               },
             })
           } else {
@@ -1385,6 +1426,15 @@ export const useChat = () => {
                 tokenSpeed: useAppState.getState().tokenSpeed,
                 assistant: currentAssistant,
                 modelId: selectedModel?.id,
+                // Include routing decision if available
+                ...(routeDecision && {
+                  routingDecision: {
+                    modelId: routeDecision.modelId,
+                    providerId: routeDecision.providerId,
+                    confidence: routeDecision.confidence,
+                    reasoning: routeDecision.reasoning,
+                  },
+                }),
               }),
               status: MessageStatus.Stopped,
             }

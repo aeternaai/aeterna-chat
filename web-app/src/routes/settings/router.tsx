@@ -26,7 +26,6 @@ function RouterSettings() {
   >([])
   const [currentStrategy, setCurrentStrategy] = useState<string>('')
   const [loading, setLoading] = useState(true)
-  const [allowedModels, setAllowedModels] = useState<string>('')
   const [routingConfigs, setRoutingConfigs] = useState<ModelRoutingConfig[]>([])
   const [editingConfigIndex, setEditingConfigIndex] = useState<number | null>(null)
   const [newConfig, setNewConfig] = useState<ModelRoutingConfig>({ id: '', description: '' })
@@ -74,10 +73,6 @@ function RouterSettings() {
         // Load allowed models setting
         if (router.getSettings) {
           const settings = await router.getSettings()
-          const allowedModelsSetting = settings.find(s => s.key === 'allowed_models')
-          if (allowedModelsSetting) {
-            setAllowedModels(allowedModelsSetting.controllerProps.value as string)
-          }
           
           // Load model routing configs
           const routingConfigsSetting = settings.find(s => s.key === 'model_routing_configs')
@@ -115,14 +110,9 @@ function RouterSettings() {
             const activeStrategy = retryRouter.getStrategy()
             setCurrentStrategy(activeStrategy.name)
 
-            // Load allowed models setting on retry
+            // Load model routing configs on retry
             if (retryRouter.getSettings) {
               retryRouter.getSettings().then(settings => {
-                const allowedModelsSetting = settings.find(s => s.key === 'allowed_models')
-                if (allowedModelsSetting) {
-                  setAllowedModels(allowedModelsSetting.controllerProps.value as string)
-                }
-                
                 // Load model routing configs on retry
                 const routingConfigsSetting = settings.find(s => s.key === 'model_routing_configs')
                 if (routingConfigsSetting) {
@@ -185,24 +175,6 @@ function RouterSettings() {
         console.log('[Router Settings] Updated router model:', modelId)
       } catch (error) {
         console.error('[Router Settings] Failed to save router model:', error)
-      }
-    },
-    []
-  )
-
-  const handleAllowedModelsChange = useCallback(
-    async (value: string) => {
-      setAllowedModels(value)
-      try {
-        const router = RouterManager.instance().get()
-        if (router && router.updateSettings) {
-          await router.updateSettings([
-            { key: 'allowed_models', controllerProps: { value } }
-          ])
-          console.log('[Router Settings] Updated allowed models:', value)
-        }
-      } catch (error) {
-        console.error('Failed to update allowed models:', error)
       }
     },
     []
@@ -416,27 +388,6 @@ function RouterSettings() {
                       Current: {routerModel}
                     </span>
                   )}
-                </p>
-              </div>
-            </Card>
-
-            {/* Allowed Models Configuration */}
-            <Card title="Allowed Models">
-              <CardItem
-                title="Model Whitelist"
-                description="Comma-separated list of model IDs that the router is allowed to select. Leave empty to allow all models."
-                className="flex-col sm:flex-row items-start gap-y-2"
-              />
-              <div className="px-4 pb-4">
-                <input
-                  type="text"
-                  value={allowedModels}
-                  onChange={(e) => handleAllowedModelsChange(e.target.value)}
-                  placeholder="e.g., Qwen3-VL-8B-Instruct-IQ4_XS,gemma-3n-E4B-it-IQ4_XS"
-                  className="w-full px-3 py-2 text-sm border border-main-view-fg/10 rounded-lg bg-transparent text-main-view-fg focus:outline-none focus:border-primary"
-                />
-                <p className="text-xs text-main-view-fg/60 mt-2">
-                  Example: <code className="px-1 py-0.5 bg-main-view-fg/5 rounded">Qwen3-VL-8B-Instruct-IQ4_XS,gemma-3n-E4B-it-IQ4_XS</code>
                 </p>
               </div>
             </Card>
