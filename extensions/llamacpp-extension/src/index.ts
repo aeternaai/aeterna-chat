@@ -186,6 +186,10 @@ const logger = {
 export default class llamacpp_extension extends AIEngine {
   provider: string = 'llamacpp'
   autoUnload: boolean = true
+  // Router model ID to exempt from auto-unload
+  routerModelId: string = 'Phi-4-mini-instruct_Q4_K_M'
+  // Router session PID - tracks the specific session used for routing
+  routerSessionPid: number | null = null
   timeout: number = 600
   llamacpp_env: string = ''
   memoryMode: string = ''
@@ -1015,6 +1019,37 @@ export default class llamacpp_extension extends AIEngine {
     }
   }
 
+  /**
+   * Mark a specific session as the router session to exempt from auto-unload
+   * This allows using the same model for both routing and answering
+   * @param modelId - Model ID to mark as router
+   */
+  async setRouterSession(modelId: string): Promise<void> {
+    try {
+      const sessionInfo = await this.findSessionByModel(modelId)
+      if (sessionInfo) {
+        this.routerSessionPid = sessionInfo.pid
+        logger.info(
+          `Marked session PID ${sessionInfo.pid} (model: ${modelId}) as router session - will be exempt from auto-unload`
+        )
+      } else {
+        logger.warn(
+          `Cannot mark router session: No active session found for model ${modelId}`
+        )
+      }
+    } catch (error) {
+      logger.error(`Failed to set router session for ${modelId}:`, error)
+    }
+  }
+
+  /**
+   * Clear the router session marker
+   */
+  clearRouterSession(): void {
+    logger.info(`Clearing router session marker (was PID ${this.routerSessionPid})`)
+    this.routerSessionPid = null
+  }
+
   private async generateApiKey(modelId: string, port: string): Promise<string> {
     const hash = await invoke<string>('plugin:llamacpp|generate_api_key', {
       modelId: modelId + port,
@@ -1611,50 +1646,72 @@ export default class llamacpp_extension extends AIEngine {
 
   override async load(
     modelId: string,
-    overrideSettings?: Partial<LlamacppConfig>,
+    overrideSettings?: Partial<LlamacppConfig> & { __allowMultiSession?: boolean },
     isEmbedding: boolean = false
   ): Promise<SessionInfo> {
+    // Extract internal flag if present
+    const allowMultiSession = overrideSettings?.__allowMultiSession ?? false
+    const cleanSettings = { ...overrideSettings }
+    delete cleanSettings.__allowMultiSession
+
     const sInfo = await this.findSessionByModel(modelId)
-    if (sInfo) {
+    if (sInfo && !allowMultiSession) {
       throw new Error('Model already loaded!!')
     }
 
-    // If this model is already being loaded, return the existing promise
-    if (this.loadingModels.has(modelId)) {
-      return this.loadingModels.get(modelId)!
+    // If multi-session is allowed and model already loaded, we'll create a new session
+    // This is needed when router model is used both for routing AND as a response model
+    if (sInfo && allowMultiSession) {
+      logger.info(
+        `Loading additional session for model '${modelId}' (multi-session mode - router + response)`
+      )
+    }
+
+    // Generate unique key for tracking concurrent loads
+    // For multi-session, append timestamp to make key unique
+    const loadingKey = allowMultiSession 
+      ? `${modelId}:${Date.now()}` 
+      : modelId
+
+    // If this model is already being loaded (same key), return the existing promise
+    if (this.loadingModels.has(loadingKey)) {
+      return this.loadingModels.get(loadingKey)!
     }
 
     // Create the loading promise
     const loadingPromise = this.performLoad(
       modelId,
-      overrideSettings,
-      isEmbedding
+      cleanSettings,
+      isEmbedding,
+      allowMultiSession
     )
-    this.loadingModels.set(modelId, loadingPromise)
+    this.loadingModels.set(loadingKey, loadingPromise)
 
     try {
       const result = await loadingPromise
       return result
     } finally {
-      this.loadingModels.delete(modelId)
+      this.loadingModels.delete(loadingKey)
     }
   }
 
   private async performLoad(
     modelId: string,
     overrideSettings?: Partial<LlamacppConfig>,
-    isEmbedding: boolean = false
+    isEmbedding: boolean = false,
+    allowMultiSession: boolean = false
   ): Promise<SessionInfo> {
     const loadedModels = await this.getLoadedModels()
 
     // Get OTHER models that are currently loading (exclude current model)
     const otherLoadingPromises = Array.from(this.loadingModels.entries())
-      .filter(([id, _]) => id !== modelId)
+      .filter(([id, _]) => id !== modelId && !id.startsWith(`${modelId}:`))
       .map(([_, promise]) => promise)
 
     if (
       this.autoUnload &&
       !isEmbedding &&
+      !allowMultiSession && // Don't auto-unload when loading additional session for router model
       (loadedModels.length > 0 || otherLoadingPromises.length > 0)
     ) {
       // Wait for OTHER loading models to finish, then unload everything
@@ -1681,8 +1738,24 @@ export default class llamacpp_extension extends AIEngine {
             (s): s is SessionInfo => s !== null && s.is_embedding === false
           )
           .map((s) => s.model_id)
+          // Exclude router model from auto-unload to prevent 404 errors in LLM routing
+          // Filter by model_id for backward compatibility, but prefer PID-based filtering
+          .filter((id) => {
+            // If we have a router session PID, exempt that specific session
+            if (this.routerSessionPid !== null) {
+              const sessionInfo = sessionInfos.find(s => s?.model_id === id)
+              if (sessionInfo?.pid === this.routerSessionPid) {
+                return false // Exempt this specific session
+              }
+            }
+            // Fallback: also exempt by model_id (for cases where router PID not tracked)
+            return id !== this.routerModelId
+          })
 
         if (nonEmbeddingModels.length > 0) {
+          logger.info(
+            `Auto-unloading ${nonEmbeddingModels.length} models (preserving router session: PID=${this.routerSessionPid}, model=${this.routerModelId})`
+          )
           await Promise.all(
             nonEmbeddingModels.map((modelId) => this.unload(modelId))
           )
@@ -1843,16 +1916,22 @@ export default class llamacpp_extension extends AIEngine {
     if (!sInfo) {
       throw new Error(`No active session found for model: ${modelId}`)
     }
-    const pid = sInfo.pid
+    return this.unloadByPid(sInfo.pid)
+  }
+
+  /**
+   * Unload a model session by PID
+   * Used for multi-session scenarios where same model_id has multiple sessions
+   */
+  private async unloadByPid(pid: number): Promise<UnloadResult> {
     try {
-      // Pass the PID as the session_id
       const result = await unloadLlamaModel(pid)
 
       // If successful, remove from active sessions
       if (result.success) {
-        logger.info(`Successfully unloaded model with PID ${pid}`)
+        logger.info(`Successfully unloaded session with PID ${pid}`)
       } else {
-        logger.warn(`Failed to unload model: ${result.error}`)
+        logger.warn(`Failed to unload session PID ${pid}: ${result.error}`)
       }
 
       return result
@@ -1860,7 +1939,7 @@ export default class llamacpp_extension extends AIEngine {
       logger.error('Error in unload command:', error)
       return {
         success: false,
-        error: `Failed to unload model: ${error}`,
+        error: `Failed to unload session: ${error}`,
       }
     }
   }
@@ -2097,6 +2176,22 @@ export default class llamacpp_extension extends AIEngine {
     } catch (e) {
       logger.error(e)
       throw new Error(e)
+    }
+  }
+
+  /**
+   * Get all active sessions (supports multi-session scenarios)
+   * Use this instead of getLoadedModels when you need session-level granularity
+   */
+  private async getAllActiveSessions(): Promise<SessionInfo[]> {
+    try {
+      const sessions = await invoke<SessionInfo[]>(
+        'plugin:llamacpp|get_all_sessions'
+      )
+      return sessions
+    } catch (e) {
+      logger.error('Failed to get all active sessions:', e)
+      throw new Error(String(e))
     }
   }
 

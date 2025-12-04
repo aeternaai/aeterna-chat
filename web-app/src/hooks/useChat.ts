@@ -45,8 +45,37 @@ import { toast } from 'sonner'
 import { Attachment } from '@/types/attachment'
 import { MCPTool } from '@/types/completion'
 import { RouterManager } from '@janhq/core'
-import type { AvailableModel, ChatCompletionMessage } from '@janhq/core'
-import { ChatCompletionRole } from '@janhq/core'
+import type { 
+  AvailableModel, 
+  ChatCompletionMessage,
+  ChatCompletionMessageContentText,
+  ChatCompletionMessageContentImage,
+  ChatCompletionMessageContentDoc,
+  RouteDecision,
+} from '@janhq/core'
+import { ChatCompletionRole, ChatCompletionMessageContentType } from '@janhq/core'
+import { invoke } from '@tauri-apps/api/core'
+
+// Default router model ID (can be overridden via Tauri config)
+let ROUTER_MODEL_ID = 'Phi-4-mini-instruct_Q4_K_M'
+
+// Load router model ID from Tauri config
+const loadRouterModelId = async (): Promise<string> => {
+  try {
+    const savedRouterModel = await invoke<string | null>('get_router_model_config')
+    if (savedRouterModel) {
+      ROUTER_MODEL_ID = savedRouterModel
+      console.log('[useChat] Loaded router model from config:', savedRouterModel)
+      return savedRouterModel
+    }
+  } catch (error) {
+    console.warn('[useChat] Failed to load router model config, using default:', error)
+  }
+  return ROUTER_MODEL_ID
+}
+
+// Initialize router model ID
+loadRouterModelId()
 
 // Helper to infer model capabilities from model metadata
 const inferCapabilities = (model: Model): string[] => {
@@ -77,17 +106,35 @@ const inferCapabilities = (model: Model): string[] => {
 // Helper to build available models array from providers
 const buildAvailableModels = (
   providers: ModelProvider[],
-  activeModelIds: string[] = []
+  activeModelIds: string[] = [],
+  excludeRouterModel: boolean = false
 ): AvailableModel[] => {
   const availableModels: AvailableModel[] = []
 
+  console.log('[buildAvailableModels] Building with', providers.length, 'providers')
+  console.log('[buildAvailableModels] Active model IDs:', activeModelIds)
+  console.log('[buildAvailableModels] Exclude router model:', excludeRouterModel)
+
   for (const provider of providers) {
-    if (!provider.active) continue
+    console.log(`[buildAvailableModels] Provider: ${provider.provider}, active: ${provider.active}, models: ${provider.models.length}`)
+    if (!provider.active) {
+      console.log(`[buildAvailableModels] Skipping inactive provider: ${provider.provider}`)
+      continue
+    }
 
     for (const model of provider.models) {
+      // Skip router model if requested (for response models list)
+      if (excludeRouterModel && model.id === ROUTER_MODEL_ID) {
+        console.log(`[buildAvailableModels]   Skipping router model: ${model.id}`)
+        continue
+      }
+
       // Extract parameter count from model name (e.g., "7B", "13B", "70B")
       const paramCountMatch = model.id.match(/(\d+\.?\d*)B/i)
       const parameterCount = paramCountMatch ? paramCountMatch[1] + 'B' : undefined
+
+      const isLoaded = activeModelIds.includes(model.id)
+      console.log(`[buildAvailableModels]   Model: ${model.id}, loaded: ${isLoaded}`)
 
       availableModels.push({
         id: model.id,
@@ -99,13 +146,56 @@ const buildAvailableModels = (
             typeof model.settings?.ctx_len === 'number'
               ? model.settings.ctx_len
               : 4096,
-          isLoaded: activeModelIds.includes(model.id),
+          isLoaded,
         },
       })
     }
   }
 
+  console.log('[buildAvailableModels] Built', availableModels.length, 'available models')
+  console.log('[buildAvailableModels] Model IDs:', availableModels.map(m => m.id))
+
   return availableModels
+}
+
+/**
+ * Build router model separately from response models
+ */
+const buildRouterModel = (
+  providers: ModelProvider[],
+  activeModelIds: string[] = []
+): AvailableModel | undefined => {
+  console.log('[buildRouterModel] Looking for router model:', ROUTER_MODEL_ID)
+  
+  for (const provider of providers) {
+    if (!provider.active) continue
+    
+    const routerModel = provider.models.find(m => m.id === ROUTER_MODEL_ID)
+    if (routerModel) {
+      const isLoaded = activeModelIds.includes(routerModel.id)
+      console.log('[buildRouterModel] Found router model:', ROUTER_MODEL_ID, 'loaded:', isLoaded)
+      
+      const paramCountMatch = routerModel.id.match(/(\d+\.?\d*)B/i)
+      const parameterCount = paramCountMatch ? paramCountMatch[1] + 'B' : undefined
+      
+      return {
+        id: routerModel.id,
+        providerId: provider.provider,
+        capabilities: inferCapabilities(routerModel),
+        metadata: {
+          parameterCount,
+          contextWindow: 
+            typeof routerModel.settings?.ctx_len === 'number'
+              ? routerModel.settings.ctx_len
+              : 4096,
+          isLoaded,
+        },
+      }
+    }
+  }
+  
+  console.log('[buildRouterModel] Router model not found')
+  return undefined
 }
 import { useMCPServers } from '@/hooks/useMCPServers'
 
@@ -710,6 +800,9 @@ export const useChat = () => {
       const routingEnabled = useAppState.getState().routingEnabled
       let selectedModel = useModelProvider.getState().selectedModel
       let targetProvider = selectedProvider
+      
+      // Store routing decision for metadata
+      let routeDecision: RouteDecision | null = null
 
       // Apply routing if enabled
       if (routingEnabled && !continueFromMessageId) {
@@ -718,9 +811,15 @@ export const useChat = () => {
           if (router) {
             const providers = useModelProvider.getState().providers
             const activeModelIds = useAppState.getState().activeModels
-            const availableModels = buildAvailableModels(providers, activeModelIds)
             
-            console.log('[Router] Routing query with', availableModels.length, 'available models')
+            // Build response models (excluding router model)
+            const availableModels = buildAvailableModels(providers, activeModelIds, false)
+            
+            // Build router model separately
+            const routerModel = buildRouterModel(providers, activeModelIds)
+            
+            console.log('[Router] Routing query with', availableModels.length, 'response models')
+            console.log('[Router] Router model:', routerModel?.id || 'none')
             console.log('[Router] Active models:', activeModelIds)
             
             // Check if there are any available models
@@ -730,21 +829,66 @@ export const useChat = () => {
               return
             }
             
-            // Build messages for routing context
+            // Build messages for routing context - preserve multimodal content structure
             const routingMessages: ChatCompletionMessage[] = [
-              ...messages.map(m => ({
-                role: m.role === 'user' ? ChatCompletionRole.User : 
+              ...messages.map(m => {
+                const role = m.role === 'user' ? ChatCompletionRole.User : 
                       m.role === 'assistant' ? ChatCompletionRole.Assistant :
-                      ChatCompletionRole.System,
-                content: m.content?.[0]?.text?.value || '',
-              })),
+                      ChatCompletionRole.System
+                
+                // For multimodal messages, preserve the content structure
+                // so the router can detect images/documents in conversation history
+                if (Array.isArray(m.content) && m.content.length > 0) {
+                  // Check if this message has multimodal content (images)
+                  // ContentType.Image = 'image_url'
+                  const hasMultimodal = m.content.some(part => 
+                    part.type === ContentType.Image || part.image_url
+                  )
+                  
+                  if (hasMultimodal) {
+                    // Preserve the full content structure for the router to analyze
+                    const contentArray: (ChatCompletionMessageContentText & ChatCompletionMessageContentImage & ChatCompletionMessageContentDoc)[] = m.content.map(part => {
+                      if (part.type === ContentType.Text || part.text) {
+                        return { 
+                          type: ChatCompletionMessageContentType.Text, 
+                          text: part.text?.value || '',
+                          image_url: { url: '' },
+                          doc_url: { url: '' },
+                        }
+                      }
+                      if (part.type === ContentType.Image || part.image_url) {
+                        return { 
+                          type: ChatCompletionMessageContentType.Image, 
+                          text: '',
+                          image_url: { url: part.image_url?.url || '' },
+                          doc_url: { url: '' },
+                        }
+                      }
+                      return { 
+                        type: ChatCompletionMessageContentType.Text, 
+                        text: '',
+                        image_url: { url: '' },
+                        doc_url: { url: '' },
+                      }
+                    })
+                    return { role, content: contentArray }
+                  }
+                }
+                
+                // Single text content or non-multimodal
+                return {
+                  role,
+                  content: m.content?.[0]?.text?.value || '',
+                }
+              }),
               { role: ChatCompletionRole.User, content: message },
             ]
             
-            const routeDecision = await router.route({
+            routeDecision = await router.route({
               messages: routingMessages,
               threadId: activeThread.id,
               availableModels,
+              routerModel,
               activeModels: activeModelIds,
               attachments: {
                 images: images.length,
@@ -757,11 +901,12 @@ export const useChat = () => {
 
             // Update target model and provider based on routing decision
             if (routeDecision) {
+              const decision = routeDecision // Capture for closure
               const routedModel = providers
                 .flatMap(p => p.models.map(m => ({ model: m, provider: p.provider })))
                 .find(item => 
-                  item.model.id === routeDecision.modelId && 
-                  item.provider === routeDecision.providerId
+                  item.model.id === decision.modelId && 
+                  item.provider === decision.providerId
                 )
 
               if (routedModel) {
@@ -1091,6 +1236,15 @@ export const useChat = () => {
               tokenSpeed: useAppState.getState().tokenSpeed,
               assistant: currentAssistant,
               modelId: selectedModel?.id,
+              // Include routing decision if available
+              ...(routeDecision && {
+                routingDecision: {
+                  modelId: routeDecision.modelId,
+                  providerId: routeDecision.providerId,
+                  confidence: routeDecision.confidence,
+                  reasoning: routeDecision.reasoning,
+                },
+              }),
             }
           )
 
@@ -1178,6 +1332,15 @@ export const useChat = () => {
                 tokenSpeed: useAppState.getState().tokenSpeed,
                 assistant: currentAssistant,
                 modelId: selectedModel?.id,
+                // Include routing decision if available
+                ...(routeDecision && {
+                  routingDecision: {
+                    modelId: routeDecision.modelId,
+                    providerId: routeDecision.providerId,
+                    confidence: routeDecision.confidence,
+                    reasoning: routeDecision.reasoning,
+                  },
+                }),
               },
             })
           } else {
@@ -1190,6 +1353,15 @@ export const useChat = () => {
                   tokenSpeed: useAppState.getState().tokenSpeed,
                   assistant: currentAssistant,
                   modelId: selectedModel?.id,
+                  // Include routing decision if available
+                  ...(routeDecision && {
+                    routingDecision: {
+                      modelId: routeDecision.modelId,
+                      providerId: routeDecision.providerId,
+                      confidence: routeDecision.confidence,
+                      reasoning: routeDecision.reasoning,
+                    },
+                  }),
                 }
               ),
               status: MessageStatus.Stopped,
@@ -1237,6 +1409,15 @@ export const useChat = () => {
                 tokenSpeed: useAppState.getState().tokenSpeed,
                 assistant: currentAssistant,
                 modelId: selectedModel?.id,
+                // Include routing decision if available
+                ...(routeDecision && {
+                  routingDecision: {
+                    modelId: routeDecision.modelId,
+                    providerId: routeDecision.providerId,
+                    confidence: routeDecision.confidence,
+                    reasoning: routeDecision.reasoning,
+                  },
+                }),
               },
             })
           } else {
@@ -1245,6 +1426,15 @@ export const useChat = () => {
                 tokenSpeed: useAppState.getState().tokenSpeed,
                 assistant: currentAssistant,
                 modelId: selectedModel?.id,
+                // Include routing decision if available
+                ...(routeDecision && {
+                  routingDecision: {
+                    modelId: routeDecision.modelId,
+                    providerId: routeDecision.providerId,
+                    confidence: routeDecision.confidence,
+                    reasoning: routeDecision.reasoning,
+                  },
+                }),
               }),
               status: MessageStatus.Stopped,
             }

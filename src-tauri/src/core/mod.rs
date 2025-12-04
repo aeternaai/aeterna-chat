@@ -3,6 +3,7 @@ pub mod downloads;
 pub mod extensions;
 pub mod filesystem;
 pub mod mcp;
+pub mod router;
 pub mod server;
 pub mod setup;
 pub mod state;

@@ -20,7 +20,10 @@ use tauri_plugin_store::Store;
 use crate::core::mcp::helpers::add_server_config;
 
 use super::{
-    extensions::commands::get_jan_extensions_path, mcp::helpers::run_mcp_commands, state::AppState,
+    extensions::commands::get_jan_extensions_path, 
+    mcp::helpers::run_mcp_commands, 
+    router::commands::start_router,
+    state::AppState,
 };
 
 pub fn install_extensions<R: Runtime>(app: tauri::AppHandle<R>, force: bool) -> Result<(), String> {
@@ -250,6 +253,31 @@ pub fn setup_mcp<R: Runtime>(app: &App<R>) {
         app_handle
             .emit("mcp-update", "MCP servers updated")
             .unwrap();
+    });
+}
+
+pub fn setup_router<R: Runtime>(app: &App<R>) {
+    let app_handle = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        log::info!("🐍 ============================================");
+        log::info!("🐍 Initializing Python Router Service");
+        log::info!("🐍 ============================================");
+        
+        match start_router(app_handle.clone(), app_handle.state::<AppState>()).await {
+            Ok(_) => {
+                log::info!("🐍 ============================================");
+                log::info!("🐍 ✅ Router Service Started Successfully!");
+                log::info!("🐍 ============================================");
+            }
+            Err(e) => {
+                log::error!("🐍 ============================================");
+                log::error!("🐍 ❌ Router Service Failed to Start");
+                log::error!("🐍 ============================================");
+                log::error!("🐍 Error: {}", e);
+                log::error!("🐍 The application will use TypeScript fallback routing");
+                log::error!("🐍 ============================================");
+            }
+        }
     });
 }
 

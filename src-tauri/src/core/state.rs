@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::core::{downloads::models::DownloadManagerState, mcp::models::McpSettings};
+use crate::core::{downloads::models::DownloadManagerState, mcp::models::McpSettings, router::models::RouterConfig};
 use rmcp::{
     model::{CallToolRequestParam, CallToolResult, InitializeRequestParam, Tool},
     service::RunningService,
@@ -8,6 +8,7 @@ use rmcp::{
 };
 use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
+use tokio::process::Child;
 
 /// Server handle type for managing the proxy server lifecycle
 pub type ServerHandle = JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>;
@@ -29,6 +30,9 @@ pub struct AppState {
     pub server_handle: Arc<Mutex<Option<ServerHandle>>>,
     pub tool_call_cancellations: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
     pub mcp_settings: Arc<Mutex<McpSettings>>,
+    // Router service state
+    pub router_process: Arc<Mutex<Option<Child>>>,
+    pub router_config: Arc<Mutex<RouterConfig>>,
 }
 
 impl RunningServiceEnum {

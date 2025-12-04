@@ -3,6 +3,7 @@ use core::{
     app::commands::get_jan_data_folder_path,
     downloads::models::DownloadManagerState,
     mcp::{helpers::clean_up_mcp_servers, models::McpSettings},
+    router::models::RouterConfig,
     setup::{self, setup_mcp},
     state::AppState,
 };
@@ -99,6 +100,16 @@ pub fn run() {
             core::mcp::commands::activate_mcp_server,
             core::mcp::commands::deactivate_mcp_server,
             core::mcp::commands::reset_mcp_restart_count,
+            // Router commands
+            core::router::commands::start_router,
+            core::router::commands::stop_router,
+            core::router::commands::route_request,
+            core::router::commands::get_router_health,
+            core::router::commands::list_router_strategies,
+            core::router::commands::set_router_strategy,
+            core::router::commands::configure_router_llm,
+            core::router::commands::get_router_model_config,
+            core::router::commands::set_router_model_config,
             // Threads
             core::threads::commands::list_threads,
             core::threads::commands::create_thread,
@@ -125,6 +136,8 @@ pub fn run() {
             server_handle: Arc::new(Mutex::new(None)),
             tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
             mcp_settings: Arc::new(Mutex::new(McpSettings::default())),
+            router_process: Arc::new(Mutex::new(None)),
+            router_config: Arc::new(Mutex::new(RouterConfig::default())),
         })
         .setup(|app| {
             app.handle().plugin(
@@ -197,6 +210,7 @@ pub fn run() {
             }
 
             setup_mcp(app);
+            setup::setup_router(app);
             setup::setup_theme_listener(app)?;
             Ok(())
         })

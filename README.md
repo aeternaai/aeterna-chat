@@ -144,3 +144,6 @@ Built on the shoulders of giants:
 - [Llama.cpp](https://github.com/ggerganov/llama.cpp)
 - [Tauri](https://tauri.app/)
 - [Scalar](https://github.com/scalar/scalar)
+
+## Fixing cache
+find web-app/node_modules/.vite -name "*.js" -delete 2>/dev/null; rm -rf web-app/node_modules/.vite/deps; echo "Vite deps cache cleared"

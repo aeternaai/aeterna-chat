@@ -73,6 +73,8 @@ function Hub() {
 function HubContent() {
   const parentRef = useRef(null)
   const huggingfaceToken = useGeneralSetting((state) => state.huggingfaceToken)
+  const allowedDownloadModels = useGeneralSetting((state) => state.allowedDownloadModels)
+  const downloadOnlyAllowedModels = useGeneralSetting((state) => state.downloadOnlyAllowedModels)
   const serviceHub = useServiceHub()
 
   const { t } = useTranslation()
@@ -103,6 +105,7 @@ function HubContent() {
   )
   const [isSearching, setIsSearching] = useState(false)
   const [showOnlyDownloaded, setShowOnlyDownloaded] = useState(false)
+  const [showOnlyAllowed, setShowOnlyAllowed] = useState(false)
   const [huggingFaceRepo, setHuggingFaceRepo] = useState<CatalogModel | null>(
     null
   )
@@ -170,6 +173,33 @@ function HubContent() {
         }))
         .filter((model) => model.quants.length > 0)
     }
+    // Apply allowed models filter
+    if (showOnlyAllowed) {
+      if (allowedDownloadModels) {
+        try {
+          const allowedList = JSON.parse(allowedDownloadModels) as Array<{ id: string }>
+          if (Array.isArray(allowedList) && allowedList.length > 0) {
+            const allowedIds = allowedList.map(item => item.id).filter(id => typeof id === 'string')
+            console.log('[Hub] Filtering by allowed models:', allowedIds)
+            if (allowedIds.length > 0) {
+              filtered = filtered
+                ?.map((model) => ({
+                  ...model,
+                  quants: model.quants.filter((variant) =>
+                    allowedIds.includes(variant.model_id)
+                  ),
+                }))
+                .filter((model) => model.quants.length > 0)
+              console.log('[Hub] Filtered to', filtered.length, 'models')
+            }
+          }
+        } catch (error) {
+          console.error('[Hub] Failed to parse allowed download models:', error)
+        }
+      } else {
+        console.log('[Hub] No allowed download models configured, showing all models')
+      }
+    }
     // Add HuggingFace repo at the beginning if available
     if (huggingFaceRepo) {
       filtered = [huggingFaceRepo, ...filtered]
@@ -179,9 +209,38 @@ function HubContent() {
     sortedModels,
     debouncedSearchValue,
     showOnlyDownloaded,
+    showOnlyAllowed,
+    allowedDownloadModels,
     huggingFaceRepo,
     searchOptions,
   ])
+
+  // Helper function to check if a model is allowed to be downloaded
+  const isModelDownloadAllowed = useCallback((modelId: string): boolean => {
+    // If download restriction is disabled, all models are allowed
+    if (!downloadOnlyAllowedModels) {
+      return true
+    }
+    
+    // If no allowed list is configured, all models are allowed
+    if (!allowedDownloadModels) {
+      return true
+    }
+    
+    try {
+      const allowedList = JSON.parse(allowedDownloadModels) as Array<{ id: string }>
+      if (!Array.isArray(allowedList) || allowedList.length === 0) {
+        return true
+      }
+      
+      const allowedIds = allowedList.map(item => item.id).filter(id => typeof id === 'string')
+      return allowedIds.includes(modelId)
+    } catch (error) {
+      console.error('[Hub] Failed to parse allowed download models:', error)
+      // On parse error, allow downloads to avoid breaking the UI
+      return true
+    }
+  }, [downloadOnlyAllowedModels, allowedDownloadModels])
 
   // The virtualizer
   const rowVirtualizer = useVirtualizer({
@@ -352,6 +411,23 @@ function HubContent() {
             {t('hub:downloaded')}
           </span>
         </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={showOnlyAllowed}
+            onCheckedChange={(checked) => {
+              setShowOnlyAllowed(checked)
+              if (checked) {
+                setHuggingFaceRepo(null)
+              } else {
+                // Re-trigger HuggingFace search when switching back to "All models"
+                fetchHuggingFaceModel(searchValue)
+              }
+            }}
+          />
+          <span className="text-xs text-main-view-fg/70 font-medium whitespace-nowrap">
+            {t('hub:allowedModels') || 'Allowed Models'}
+          </span>
+        </div>
       </>
     )
   }
@@ -488,6 +564,13 @@ function HubContent() {
                                 <DownloadButtonPlaceholder
                                   model={filteredModels[virtualItem.index]}
                                   handleUseModel={handleUseModel}
+                                  isDownloadAllowed={isModelDownloadAllowed(
+                                    filteredModels[virtualItem.index].quants.find((e) =>
+                                      ['iq4_xs', 'q4_k_m'].some((m) =>
+                                        e.model_id.toLowerCase().includes(m)
+                                      )
+                                    )?.model_id || filteredModels[virtualItem.index].quants[0]?.model_id || filteredModels[virtualItem.index].model_name
+                                  )}
                                 />
                               </div>
                             </div>
@@ -690,6 +773,7 @@ function HubContent() {
                                             model={
                                               filteredModels[virtualItem.index]
                                             }
+                                            isDownloadAllowed={isModelDownloadAllowed(variant.model_id)}
                                           />
                                         </div>
                                       }

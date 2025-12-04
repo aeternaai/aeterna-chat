@@ -1,5 +1,11 @@
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { route } from '@/constants/routes'
 import { useDownloadStore } from '@/hooks/useDownloadStore'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
@@ -14,9 +20,11 @@ import { useCallback, useMemo } from 'react'
 export const ModelDownloadAction = ({
   variant,
   model,
+  isDownloadAllowed = true,
 }: {
   variant: { model_id: string; path: string }
   model: CatalogModel
+  isDownloadAllowed?: boolean
 }) => {
   const serviceHub = useServiceHub()
 
@@ -91,6 +99,26 @@ export const ModelDownloadAction = ({
           {t('hub:use')}
         </Button>
       </div>
+    )
+  }
+
+  if (!isDownloadAllowed) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="size-6 cursor-not-allowed flex items-center justify-center rounded opacity-50"
+              title={t('hub:downloadModel')}
+            >
+              <IconDownload size={16} className="text-main-view-fg/40" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>This model is not in the allowed download list</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     )
   }
 

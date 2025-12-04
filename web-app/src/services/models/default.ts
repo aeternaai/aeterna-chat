@@ -309,7 +309,17 @@ export class DefaultModelsService implements ModelsService {
     if (!engine) return undefined
 
     const loadedModels = await engine.getLoadedModels()
-    if (loadedModels.includes(model)) return undefined
+    
+    // Special handling for router model: Allow multi-session loading
+    // This enables using the same model for both routing (dedicated session) and response (temporary session)
+    const ROUTER_MODEL_ID = 'Phi-4-mini-instruct_Q4_K_M'
+    const isRouterModel = model === ROUTER_MODEL_ID
+    const routerAlreadyLoaded = isRouterModel && loadedModels.includes(model)
+    
+    if (loadedModels.includes(model) && !routerAlreadyLoaded) {
+      // Model already loaded and it's not the router model needing multi-session
+      return undefined
+    }
 
     // Find the model configuration to get settings
     const modelConfig = provider.models.find((m) => m.id === model)
@@ -332,7 +342,16 @@ export class DefaultModelsService implements ModelsService {
         )
       : undefined
 
-    return engine.load(model, settings).catch((error) => {
+    // If router model is already loaded, enable multi-session mode to create separate session for response
+    const loadSettings = routerAlreadyLoaded 
+      ? { ...settings, __allowMultiSession: true }
+      : settings
+
+    if (routerAlreadyLoaded) {
+      console.log(`[ModelsService] Loading additional session for router model '${model}' (response purpose)`)
+    }
+
+    return engine.load(model, loadSettings).catch((error) => {
       console.error(
         `Failed to start model ${model} for provider ${provider.provider}:`,
         error

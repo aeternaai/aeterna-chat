@@ -1,5 +1,11 @@
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useDownloadStore } from '@/hooks/useDownloadStore'
 import { useGeneralSetting } from '@/hooks/useGeneralSetting'
 import { useModelProvider } from '@/hooks/useModelProvider'
@@ -15,12 +21,14 @@ import { useShallow } from 'zustand/shallow'
 type ModelProps = {
   model: CatalogModel
   handleUseModel: (modelId: string) => void
+  isDownloadAllowed?: boolean
 }
 const defaultModelQuantizations = ['iq4_xs', 'q4_k_m']
 
 export function DownloadButtonPlaceholder({
   model,
   handleUseModel,
+  isDownloadAllowed = true,
 }: ModelProps) {
   const { downloads, localDownloadingModels, addLocalDownloadingModel } =
     useDownloadStore(
@@ -143,6 +151,24 @@ export function DownloadButtonPlaceholder({
         >
           {t('hub:use')}
         </Button>
+      ) : !isDownloadAllowed ? (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                data-test-id={`hub-model-${modelId}`}
+                size="sm"
+                disabled
+                className={cn(isDownloading && 'hidden')}
+              >
+                {t('hub:download')}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>This model is not in the allowed download list</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ) : (
         <Button
           data-test-id={`hub-model-${modelId}`}

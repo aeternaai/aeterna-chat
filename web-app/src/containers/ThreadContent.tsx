@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { useMessages } from '@/hooks/useMessages'
 import ThinkingBlock from '@/containers/ThinkingBlock'
 import ToolCallBlock from '@/containers/ToolCallBlock'
+import RoutingReasonBlock from '@/containers/RoutingReasonBlock'
 import { useChat } from '@/hooks/useChat'
 import {
   EditMessageDialog,
@@ -375,6 +376,18 @@ export const ThreadContent = memo(
               content={textSegment.replace('</think>', '')}
               components={linkComponents}
             />
+
+            {/* Show routing reason if available in metadata */}
+            {item.metadata?.routingDecision && (
+              <RoutingReasonBlock
+                routingDecision={item.metadata.routingDecision as {
+                  modelId: string
+                  providerId: string
+                  confidence: number
+                  reasoning: string
+                }}
+              />
+            )}
 
             {isToolCalls && item.metadata?.tool_calls ? (
               <>

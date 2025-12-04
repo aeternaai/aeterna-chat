@@ -37,6 +37,10 @@ export const Route = createFileRoute(route.settings.general as any)({
   component: General,
 })
 
+interface AllowedDownloadModel {
+  id: string
+}
+
 function General() {
   const { t } = useTranslation()
   const {
@@ -44,8 +48,16 @@ function General() {
     setSpellCheckChatInput,
     huggingfaceToken,
     setHuggingfaceToken,
+    allowedDownloadModels,
+    setAllowedDownloadModels,
+    downloadOnlyAllowedModels,
+    setDownloadOnlyAllowedModels,
   } = useGeneralSetting()
   const serviceHub = useServiceHub()
+
+  const [allowedModels, setAllowedModels] = useState<AllowedDownloadModel[]>([])
+  const [editingModelIndex, setEditingModelIndex] = useState<number | null>(null)
+  const [newModel, setNewModel] = useState<AllowedDownloadModel>({ id: '' })
 
   const openFileTitle = (): string => {
     if (IS_MACOS) {
@@ -72,6 +84,71 @@ function General() {
 
     fetchDataFolder()
   }, [serviceHub])
+
+  // Load allowed download models from settings
+  useEffect(() => {
+    if (allowedDownloadModels) {
+      try {
+        const parsed = JSON.parse(allowedDownloadModels) as AllowedDownloadModel[]
+        setAllowedModels(Array.isArray(parsed) ? parsed : [])
+      } catch (err) {
+        console.error('[General Settings] Failed to parse allowed download models:', err)
+        setAllowedModels([])
+      }
+    } else {
+      setAllowedModels([])
+    }
+  }, [allowedDownloadModels])
+
+  // Save allowed download models to settings
+  const saveAllowedModels = useCallback(
+    (models: AllowedDownloadModel[]) => {
+      const jsonValue = JSON.stringify(models)
+      console.log('[General Settings] Saving allowed download models:', models)
+      setAllowedDownloadModels(jsonValue)
+    },
+    [setAllowedDownloadModels]
+  )
+
+  const handleAddModel = useCallback(() => {
+    if (!newModel.id.trim()) {
+      return
+    }
+    
+    const updatedModels = [...allowedModels, { ...newModel }]
+    setAllowedModels(updatedModels)
+    setNewModel({ id: '' })
+    saveAllowedModels(updatedModels)
+  }, [newModel, allowedModels, saveAllowedModels])
+
+  const handleEditModel = useCallback((index: number) => {
+    setEditingModelIndex(index)
+    setNewModel({ ...allowedModels[index] })
+  }, [allowedModels])
+
+  const handleSaveEdit = useCallback(() => {
+    if (editingModelIndex === null || !newModel.id.trim()) {
+      return
+    }
+    
+    const updatedModels = [...allowedModels]
+    updatedModels[editingModelIndex] = { ...newModel }
+    setAllowedModels(updatedModels)
+    setEditingModelIndex(null)
+    setNewModel({ id: '' })
+    saveAllowedModels(updatedModels)
+  }, [editingModelIndex, newModel, allowedModels, saveAllowedModels])
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingModelIndex(null)
+    setNewModel({ id: '' })
+  }, [])
+
+  const handleDeleteModel = useCallback((index: number) => {
+    const updatedModels = allowedModels.filter((_, i) => i !== index)
+    setAllowedModels(updatedModels)
+    saveAllowedModels(updatedModels)
+  }, [allowedModels, saveAllowedModels])
 
   const resetApp = async () => {
     // Prevent resetting if data folder is root directory
@@ -426,6 +503,137 @@ function General() {
                 />
               )}
             </Card>
+
+            {/* Allowed Download Models */}
+            {PlatformFeatures[PlatformFeature.MODEL_HUB] && (
+              <Card title="Allowed Download Models">
+                <CardItem
+                  title="Download Only Allowed Models"
+                  description="When enabled, users can only download models from the allowed list below. Other models will be visible but cannot be downloaded."
+                  className="flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-y-2"
+                  actions={
+                    <Switch
+                      checked={downloadOnlyAllowedModels}
+                      onCheckedChange={(checked) => {
+                        console.log('[General Settings] Download only allowed models:', checked)
+                        setDownloadOnlyAllowedModels(checked)
+                      }}
+                    />
+                  }
+                />
+                <CardItem
+                  title="Configure Allowed Models"
+                  description="Add model IDs to restrict downloads. Leave empty to allow all models when restriction is enabled."
+                  className="flex-col items-start gap-y-2"
+                />
+                
+                {/* Existing models list */}
+                {allowedModels.length > 0 && (
+                  <div className="px-4 pb-2">
+                    <div className="space-y-2">
+                      {allowedModels.map((model, index) => (
+                        <div
+                          key={index}
+                          className="p-3 border border-main-view-fg/10 rounded-lg bg-main-view-fg/5"
+                        >
+                          {editingModelIndex === index ? (
+                            // Edit mode
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-xs text-main-view-fg/60 block mb-1">
+                                  Model ID
+                                </label>
+                                <input
+                                  type="text"
+                                  value={newModel.id}
+                                  onChange={(e) =>
+                                    setNewModel({ id: e.target.value })
+                                  }
+                                  placeholder="e.g., Qwen3-VL-8B-Instruct-IQ4_XS"
+                                  className="w-full px-2 py-1.5 text-sm border border-main-view-fg/10 rounded bg-transparent text-main-view-fg focus:outline-none focus:border-primary"
+                                />
+                              </div>
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="px-3 py-1 text-xs border border-main-view-fg/10 rounded hover:bg-main-view-fg/5 text-main-view-fg transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={handleSaveEdit}
+                                  disabled={!newModel.id.trim()}
+                                  className="px-3 py-1 text-xs bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            // View mode
+                            <div className="flex items-center justify-between gap-3">
+                              <code className="text-xs font-mono text-primary flex-1">
+                                {model.id}
+                              </code>
+                              <div className="flex gap-1 flex-shrink-0">
+                                <button
+                                  onClick={() => handleEditModel(index)}
+                                  className="px-2 py-1 text-xs border border-main-view-fg/10 rounded hover:bg-main-view-fg/10 text-main-view-fg transition-colors"
+                                  title="Edit model"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteModel(index)}
+                                  className="px-2 py-1 text-xs border border-red-500/20 rounded hover:bg-red-500/10 text-red-500 transition-colors"
+                                  title="Delete model"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add new model form */}
+                {editingModelIndex === null && (
+                  <div className="px-4 pb-4">
+                    <div className="p-3 border border-dashed border-main-view-fg/20 rounded-lg space-y-2">
+                      <div>
+                        <label className="text-xs text-main-view-fg/60 block mb-1">
+                          Model ID
+                        </label>
+                        <input
+                          type="text"
+                          value={newModel.id}
+                          onChange={(e) =>
+                            setNewModel({ id: e.target.value })
+                          }
+                          placeholder="e.g., Qwen3-VL-8B-Instruct-IQ4_XS"
+                          className="w-full px-2 py-1.5 text-sm border border-main-view-fg/10 rounded bg-transparent text-main-view-fg focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          onClick={handleAddModel}
+                          disabled={!newModel.id.trim()}
+                          className="px-3 py-1.5 text-xs bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Add Model
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-main-view-fg/60 mt-2">
+                      💡 Tip: Enter the exact model variant ID including quantization (e.g., Qwen3-VL-8B-Instruct-IQ4_XS)
+                    </p>
+                  </div>
+                )}
+              </Card>
+            )}
 
             {/* Resources */}
             <Card title={t('settings:general.resources')}>
