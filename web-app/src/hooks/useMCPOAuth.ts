@@ -20,6 +20,7 @@ export interface UseMCPOAuthReturn {
     redirect_uri?: string
   }) => Promise<void>
   revokeOAuthToken: (serverName: string) => Promise<void>
+  clearMcpRemoteAuth: () => Promise<void>
   refreshStatuses: () => Promise<void>
   getServerStatus: (serverName: string) => OAuthStatus | null
   isAuthenticated: (serverName: string) => boolean
@@ -155,6 +156,20 @@ export function useMCPOAuth(): UseMCPOAuthReturn {
     }
   }, [])
 
+  // Clear MCP remote auth folder
+  const clearMcpRemoteAuth = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      await getServiceHub().mcp().clearMcpRemoteAuth()
+      toast.success('MCP remote authentication credentials cleared')
+    } catch (error) {
+      console.error('Failed to clear MCP remote auth:', error)
+      toast.error(`Failed to clear credentials: ${error}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
   // Get OAuth status for a specific server
   const getServerStatus = useCallback((serverName: string): OAuthStatus | null => {
     return oauthStatuses[serverName] || null
@@ -171,6 +186,7 @@ export function useMCPOAuth(): UseMCPOAuthReturn {
     isLoading,
     startOAuthFlow,
     revokeOAuthToken,
+    clearMcpRemoteAuth,
     refreshStatuses,
     getServerStatus,
     isAuthenticated,

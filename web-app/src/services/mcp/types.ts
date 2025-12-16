@@ -47,4 +47,5 @@ export interface MCPService {
   getOAuthStatus(serverName: string): Promise<OAuthStatus>
   getAllOAuthStatuses(): Promise<Record<string, OAuthStatus>>
   revokeOAuthToken(serverName: string): Promise<void>
+  clearMcpRemoteAuth(): Promise<void>
 }

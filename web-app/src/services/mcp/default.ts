@@ -93,4 +93,9 @@ export class DefaultMCPService implements MCPService {
     console.log('revokeOAuthToken called with serverName:', serverName)
     // No-op - not implemented in default service
   }
+
+  async clearMcpRemoteAuth(): Promise<void> {
+    console.log('clearMcpRemoteAuth called')
+    // No-op - not implemented in default service
+  }
 }

@@ -591,3 +591,31 @@ pub async fn get_all_mcp_oauth_statuses<R: Runtime>(
     Ok(statuses)
 }
 
+/// Clear MCP remote auth folder (~/.mcp-auth)
+/// This is useful for MCP servers that use mcp-remote for OAuth
+#[tauri::command]
+pub async fn clear_mcp_remote_auth() -> Result<(), String> {
+    let home_dir = dirs::home_dir()
+        .ok_or_else(|| "Failed to get home directory".to_string())?;
+    
+    let mcp_auth_path = home_dir.join(".mcp-auth");
+    
+    if !mcp_auth_path.exists() {
+        log::info!("MCP auth folder does not exist: {:?}", mcp_auth_path);
+        return Ok(());
+    }
+    
+    log::info!("Clearing MCP remote auth folder: {:?}", mcp_auth_path);
+    
+    // Remove all contents of the directory
+    fs::remove_dir_all(&mcp_auth_path)
+        .map_err(|e| format!("Failed to remove MCP auth folder: {}", e))?;
+    
+    // Recreate the empty directory
+    fs::create_dir(&mcp_auth_path)
+        .map_err(|e| format!("Failed to recreate MCP auth folder: {}", e))?;
+    
+    log::info!("Successfully cleared MCP remote auth folder");
+    Ok(())
+}
+

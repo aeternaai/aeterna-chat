@@ -10,6 +10,7 @@ import {
   IconCodeCircle,
   IconKey,
   IconKeyOff,
+  IconDatabaseOff,
 } from '@tabler/icons-react'
 import {
   useMCPServers,
@@ -128,6 +129,7 @@ function MCPServersDesktop() {
   const {
     startOAuthFlow,
     revokeOAuthToken,
+    clearMcpRemoteAuth,
     isAuthenticated,
     isLoading: oauthLoading,
   } = useMCPOAuth()
@@ -660,6 +662,22 @@ function MCPServersDesktop() {
                               </div>
                             )}
                           </>
+                        )}
+                        {/* Clear mcp-remote auth button - only show for servers using mcp-remote */}
+                        {config.args?.some(arg => arg.includes('mcp-remote')) && (
+                          <div
+                            className={twMerge(
+                              'size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out',
+                              oauthLoading && 'opacity-50 cursor-not-allowed'
+                            )}
+                            onClick={() => !oauthLoading && clearMcpRemoteAuth()}
+                            title="Clear mcp-remote authentication credentials"
+                          >
+                            <IconDatabaseOff
+                              size={18}
+                              className="text-orange-500"
+                            />
+                          </div>
                         )}
                         <div
                           className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out"

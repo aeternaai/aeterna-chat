@@ -135,6 +135,10 @@ export class TauriMCPService extends DefaultMCPService {
   async revokeOAuthToken(serverName: string): Promise<void> {
     return await invoke('revoke_mcp_oauth_token', { serverName })
   }
+
+  async clearMcpRemoteAuth(): Promise<void> {
+    return await invoke('clear_mcp_remote_auth')
+  }
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

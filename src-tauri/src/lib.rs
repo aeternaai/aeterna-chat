@@ -105,6 +105,7 @@ pub fn run() {
             core::mcp::commands::get_mcp_oauth_status,
             core::mcp::commands::revoke_mcp_oauth_token,
             core::mcp::commands::get_all_mcp_oauth_statuses,
+            core::mcp::commands::clear_mcp_remote_auth,
             // Router commands
             core::router::commands::start_router,
             core::router::commands::stop_router,
