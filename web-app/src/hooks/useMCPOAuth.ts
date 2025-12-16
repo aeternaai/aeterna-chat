@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { listen } from '@tauri-apps/api/event'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { toast } from 'sonner'
 import { getServiceHub } from '@/hooks/useServiceHub'
 import type { OAuthStatus } from '@/types/oauth'
@@ -120,13 +121,13 @@ export function useMCPOAuth(): UseMCPOAuthReturn {
       // Open the authorization URL in browser
       if (result && result.authUrl) {
         console.log('[OAuth] Opening browser with URL:', result.authUrl)
-        const opened = window.open(result.authUrl, '_blank')
-        console.log('[OAuth] Window.open result:', opened)
-        
-        if (!opened) {
-          toast.error('Failed to open browser. Please check popup blocker settings.')
-        } else {
+        try {
+          await openUrl(result.authUrl)
+          console.log('[OAuth] Successfully opened browser')
           toast.info(`Please complete authentication in your browser for ${serverName}`)
+        } catch (error) {
+          console.error('[OAuth] Failed to open browser:', error)
+          toast.error('Failed to open browser. Please try again.')
         }
       } else {
         console.error('[OAuth] No authUrl in result:', result)
