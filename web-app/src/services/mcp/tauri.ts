@@ -4,6 +4,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { MCPTool } from '@/types/completion'
+import { OAuthStatus, OAuthFlowResult } from '@/types/oauth'
 import { DEFAULT_MCP_SETTINGS } from '@/hooks/useMCPServers'
 import type { MCPServerConfig, MCPServers, MCPSettings } from '@/hooks/useMCPServers'
 import type { MCPConfig } from './types'
@@ -110,6 +111,29 @@ export class TauriMCPService extends DefaultMCPService {
 
   async deactivateMCPServer(name: string): Promise<void> {
     return await invoke('deactivate_mcp_server', { name })
+  }
+
+  // OAuth methods
+  async startOAuthFlow(serverName: string, oauthConfig: {
+    client_id: string
+    auth_url: string
+    token_url: string
+    scopes: string[]
+    redirect_uri?: string
+  }): Promise<OAuthFlowResult> {
+    return await invoke('start_mcp_oauth_flow', { serverName, oauthConfig })
+  }
+
+  async getOAuthStatus(serverName: string): Promise<OAuthStatus> {
+    return await invoke('get_mcp_oauth_status', { serverName })
+  }
+
+  async getAllOAuthStatuses(): Promise<Record<string, OAuthStatus>> {
+    return await invoke('get_all_mcp_oauth_statuses')
+  }
+
+  async revokeOAuthToken(serverName: string): Promise<void> {
+    return await invoke('revoke_mcp_oauth_token', { serverName })
   }
 }
 

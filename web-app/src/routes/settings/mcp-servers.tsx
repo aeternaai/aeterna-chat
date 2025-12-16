@@ -8,6 +8,8 @@ import {
   IconPlus,
   IconTrash,
   IconCodeCircle,
+  IconKey,
+  IconKeyOff,
 } from '@tabler/icons-react'
 import {
   useMCPServers,
@@ -15,6 +17,7 @@ import {
   MCPSettings,
   DEFAULT_MCP_SETTINGS,
 } from '@/hooks/useMCPServers'
+import { useMCPOAuth } from '@/hooks/useMCPOAuth'
 import { useEffect, useState } from 'react'
 import AddEditMCPServer from '@/containers/dialogs/AddEditMCPServer'
 import DeleteMCPServerConfirm from '@/containers/dialogs/DeleteMCPServerConfirm'
@@ -122,6 +125,24 @@ function MCPServersDesktop() {
   } = useMCPServers()
   const { allowAllMCPPermissions, setAllowAllMCPPermissions } =
     useToolApproval()
+  const {
+    startOAuthFlow,
+    revokeOAuthToken,
+    isAuthenticated,
+    isLoading: oauthLoading,
+  } = useMCPOAuth()
+
+  // Debug: Log MCP servers to see if oauth field is loaded
+  useEffect(() => {
+    console.log('[DEBUG OAuth UI] All MCP Servers:', mcpServers)
+    Object.entries(mcpServers).forEach(([key, config]) => {
+      console.log(`[DEBUG OAuth UI] Server "${key}":`, {
+        hasOAuth: !!config.oauth,
+        oauthConfig: config.oauth,
+        active: config.active,
+      })
+    })
+  }, [mcpServers])
 
   const [open, setOpen] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
@@ -512,6 +533,28 @@ function MCPServersDesktop() {
                             <span>Official</span>
                           </div>
                         )}
+                        {config.oauth && (
+                          <div
+                            className={twMerge(
+                              'flex items-center gap-1.5 px-2 py-0.5 text-xs rounded',
+                              isAuthenticated(key)
+                                ? 'bg-green-500/10 text-green-500'
+                                : 'bg-amber-500/10 text-amber-500'
+                            )}
+                          >
+                            {isAuthenticated(key) ? (
+                              <>
+                                <IconKey size={12} />
+                                <span>Authenticated</span>
+                              </>
+                            ) : (
+                              <>
+                                <IconKeyOff size={12} />
+                                <span>Auth Required</span>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     }
                     descriptionOutside={
@@ -587,6 +630,37 @@ function MCPServersDesktop() {
                     }
                     actions={
                       <div className="flex items-center gap-0.5">
+                        {/* OAuth authentication button */}
+                        {config.oauth && (
+                          <>
+                            {isAuthenticated(key) ? (
+                              <div
+                                className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out"
+                                onClick={() => revokeOAuthToken(key)}
+                                title={t('mcp-servers:oauth.revoke')}
+                              >
+                                <IconKeyOff
+                                  size={18}
+                                  className="text-red-500"
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                className={twMerge(
+                                  'size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out',
+                                  oauthLoading && 'opacity-50 cursor-not-allowed'
+                                )}
+                                onClick={() => !oauthLoading && config.oauth && startOAuthFlow(key, config.oauth)}
+                                title={t('mcp-servers:oauth.authenticate')}
+                              >
+                                <IconKey
+                                  size={18}
+                                  className="text-blue-500"
+                                />
+                              </div>
+                            )}
+                          </>
+                        )}
                         <div
                           className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out"
                           onClick={() => handleOpenJsonEditor(key)}

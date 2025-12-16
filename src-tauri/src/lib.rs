@@ -100,6 +100,11 @@ pub fn run() {
             core::mcp::commands::activate_mcp_server,
             core::mcp::commands::deactivate_mcp_server,
             core::mcp::commands::reset_mcp_restart_count,
+            // MCP OAuth commands
+            core::mcp::commands::start_mcp_oauth_flow,
+            core::mcp::commands::get_mcp_oauth_status,
+            core::mcp::commands::revoke_mcp_oauth_token,
+            core::mcp::commands::get_all_mcp_oauth_statuses,
             // Router commands
             core::router::commands::start_router,
             core::router::commands::stop_router,
@@ -136,6 +141,9 @@ pub fn run() {
             server_handle: Arc::new(Mutex::new(None)),
             tool_call_cancellations: Arc::new(Mutex::new(HashMap::new())),
             mcp_settings: Arc::new(Mutex::new(McpSettings::default())),
+            mcp_oauth_tokens: Arc::new(Mutex::new(HashMap::new())),
+            mcp_oauth_pending: Arc::new(Mutex::new(HashMap::new())),
+            mcp_oauth_server: Arc::new(Mutex::new(None)),
             router_process: Arc::new(Mutex::new(None)),
             router_config: Arc::new(Mutex::new(RouterConfig::default())),
         })
@@ -179,6 +187,24 @@ pub fn run() {
             // Migrate MCP servers
             if let Err(e) = setup::migrate_mcp_servers(app.handle().clone(), store.clone()) {
                 log::error!("Failed to migrate MCP servers: {e}");
+            }
+
+            // Load OAuth tokens for MCP servers
+            {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    match core::mcp::oauth::load_oauth_tokens(&app_handle).await {
+                        Ok(tokens) => {
+                            let state = app_handle.state::<AppState>();
+                            let mut oauth_tokens = state.mcp_oauth_tokens.lock().await;
+                            *oauth_tokens = tokens;
+                            log::info!("Loaded {} OAuth tokens for MCP servers", oauth_tokens.len());
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to load OAuth tokens: {}", e);
+                        }
+                    }
+                });
             }
 
             // Store the new app version

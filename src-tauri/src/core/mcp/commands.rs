@@ -1,4 +1,5 @@
 use rmcp::model::{CallToolRequestParam, CallToolResult};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::sync::oneshot;
@@ -18,6 +19,13 @@ use crate::core::{
     state::{RunningServiceEnum, SharedMcpServers},
 };
 use std::{fs, time::Duration};
+
+/// OAuth flow result containing the authorization URL
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthFlowResult {
+    pub auth_url: String,
+}
 
 async fn tool_call_timeout(state: &State<'_, AppState>) -> Duration {
     state
@@ -488,3 +496,98 @@ pub async fn save_mcp_configs<R: Runtime>(app: AppHandle<R>, configs: String) ->
 
     Ok(())
 }
+
+// ============================================================================
+// OAuth Commands for MCP Servers
+// ============================================================================
+
+use super::{
+    models::{OAuthConfig, OAuthStatus},
+    oauth::{save_oauth_tokens, start_oauth_flow},
+};
+
+/// Start OAuth authentication flow for an MCP server
+#[tauri::command]
+pub async fn start_mcp_oauth_flow<R: Runtime>(
+    app: AppHandle<R>,
+    server_name: String,
+    oauth_config: OAuthConfig,
+) -> Result<OAuthFlowResult, String> {
+    log::info!("Starting OAuth flow for MCP server: {}", server_name);
+    let auth_url = start_oauth_flow(app, server_name, oauth_config).await?;
+    Ok(OAuthFlowResult { auth_url })
+}
+
+/// Get OAuth authentication status for an MCP server
+#[tauri::command]
+pub async fn get_mcp_oauth_status<R: Runtime>(
+    app: AppHandle<R>,
+    server_name: String,
+) -> Result<OAuthStatus, String> {
+    let state = app.state::<AppState>();
+    let tokens = state.mcp_oauth_tokens.lock().await;
+
+    match tokens.get(&server_name) {
+        Some(token) => Ok(OAuthStatus {
+            server_name,
+            authenticated: !token.is_expired(),
+            expires_at: Some(token.expires_at),
+            scopes: token.scopes.clone(),
+        }),
+        None => Ok(OAuthStatus {
+            server_name,
+            authenticated: false,
+            expires_at: None,
+            scopes: vec![],
+        }),
+    }
+}
+
+/// Revoke OAuth token for an MCP server
+#[tauri::command]
+pub async fn revoke_mcp_oauth_token<R: Runtime>(
+    app: AppHandle<R>,
+    server_name: String,
+) -> Result<(), String> {
+    log::info!("Revoking OAuth token for MCP server: {}", server_name);
+
+    let state = app.state::<AppState>();
+    {
+        let mut tokens = state.mcp_oauth_tokens.lock().await;
+        tokens.remove(&server_name);
+        save_oauth_tokens(&app, &tokens).await?;
+    }
+
+    // Emit event to frontend
+    app.emit(
+        "mcp_oauth_revoked",
+        serde_json::json!({
+            "server": server_name
+        }),
+    )
+    .map_err(|e| format!("Failed to emit OAuth revoked event: {e}"))?;
+
+    Ok(())
+}
+
+/// Get all OAuth statuses for MCP servers
+#[tauri::command]
+pub async fn get_all_mcp_oauth_statuses<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<Vec<OAuthStatus>, String> {
+    let state = app.state::<AppState>();
+    let tokens = state.mcp_oauth_tokens.lock().await;
+
+    let statuses: Vec<OAuthStatus> = tokens
+        .iter()
+        .map(|(server_name, token)| OAuthStatus {
+            server_name: server_name.clone(),
+            authenticated: !token.is_expired(),
+            expires_at: Some(token.expires_at),
+            scopes: token.scopes.clone(),
+        })
+        .collect();
+
+    Ok(statuses)
+}
+

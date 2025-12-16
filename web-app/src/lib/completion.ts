@@ -313,6 +313,60 @@ export const stopModel = async (
 }
 
 /**
+ * @fileoverview Helper function to sanitize JSON schemas for llama.cpp compatibility.
+ * Some MCP servers (like JIRA ROVO) return generic schemas with missing type definitions.
+ * This function ensures all schema properties have explicit types as required by llama.cpp.
+ * @param schema - The input schema to sanitize
+ * @returns Sanitized schema with explicit types
+ */
+function sanitizeSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  // Deep clone to avoid mutating original
+  const sanitized = JSON.parse(JSON.stringify(schema))
+  
+  // Ensure top-level type exists
+  if (!sanitized.type) {
+    sanitized.type = 'object'
+  }
+  
+  // Fix properties that are missing types
+  if (sanitized.properties && typeof sanitized.properties === 'object') {
+    for (const [key, value] of Object.entries(sanitized.properties as Record<string, any>)) {
+      if (value && typeof value === 'object') {
+        if (!value.type) {
+          // Default to object type for properties without explicit type
+          // This handles JIRA's generic "field value" properties
+          console.debug(`[Schema Sanitization] Adding missing type for property '${key}' in schema`)
+          value.type = 'object'
+          value.additionalProperties = true
+          value.description = value.description || 'Dynamic field value'
+        }
+        
+        // Recursively sanitize nested objects
+        if (value.properties) {
+          const nested = sanitizeSchema(value as Record<string, unknown>)
+          Object.assign(value, nested)
+        }
+        
+        // Handle array items
+        if (value.type === 'array' && value.items && typeof value.items === 'object') {
+          if (!value.items.type) {
+            value.items.type = 'object'
+            value.items.additionalProperties = true
+          }
+        }
+      }
+    }
+  }
+  
+  // Ensure required array exists (can be empty)
+  if (!sanitized.required) {
+    sanitized.required = []
+  }
+  
+  return sanitized
+}
+
+/**
  * @fileoverview Helper function to normalize tools for the chat completion request.
  * This function converts the MCPTool objects to ChatCompletionTool objects.
  * @param tools
@@ -322,15 +376,28 @@ export const normalizeTools = (
   tools: MCPTool[]
 ): ChatCompletionTool[] | Tool[] | undefined => {
   if (tools.length === 0) return undefined
-  return tools.map((tool) => ({
-    type: 'function',
-    function: {
-      name: tool.name,
-      description: tool.description?.slice(0, 1024),
-      parameters: tool.inputSchema,
-      strict: false,
-    },
-  }))
+  
+  return tools.map((tool) => {
+    // Sanitize schema before passing to llama.cpp
+    const sanitizedSchema = sanitizeSchema(tool.inputSchema)
+    
+    // Log schema transformation for debugging
+    if (JSON.stringify(tool.inputSchema) !== JSON.stringify(sanitizedSchema)) {
+      console.debug(`[Tool Normalization] Sanitized schema for tool '${tool.name}' from server '${tool.server}'`)
+      console.debug('Original schema:', tool.inputSchema)
+      console.debug('Sanitized schema:', sanitizedSchema)
+    }
+    
+    return {
+      type: 'function',
+      function: {
+        name: tool.name,
+        description: tool.description?.slice(0, 1024),
+        parameters: sanitizedSchema,
+        strict: false,
+      },
+    }
+  })
 }
 
 /**

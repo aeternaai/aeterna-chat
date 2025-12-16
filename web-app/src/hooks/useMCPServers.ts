@@ -12,6 +12,13 @@ export type MCPServerConfig = {
   headers?: Record<string, string>
   timeout?: number
   official?: boolean
+  oauth?: {
+    client_id: string
+    auth_url: string
+    token_url: string
+    scopes: string[]
+    redirect_uri?: string
+  }
 }
 
 // Define the structure of all MCP servers

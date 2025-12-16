@@ -3,7 +3,9 @@
 This document provides a quick overview of the comprehensive JIRA MCP implementation plan.
 
 ## 📄 Full Documentation
-See: `docs/src/pages/docs/desktop/mcp-jira-implementation-plan.mdx`
+
+- **Internal Implementation Plan**: `docs/concepts/JIRA_MCP_IMPLEMENTATION_PLAN.md` (this repo root)
+- **User Documentation**: `docs/src/pages/docs/desktop/mcp-examples/productivity/jira.mdx`
 
 ## 🎯 Quick Summary
 

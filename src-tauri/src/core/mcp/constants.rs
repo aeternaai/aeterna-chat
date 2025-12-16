@@ -55,6 +55,20 @@ pub const DEFAULT_MCP_CONFIG: &str = r#"{
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
       "env": {},
       "active": false
+    },
+    "jira-rovo": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.atlassian.com/v1/sse", "--transport", "sse-only"],
+      "env": {},
+      "active": false,
+      "official": true,
+      "oauth": {
+        "authUrl": "https://auth.atlassian.com/authorize",
+        "tokenUrl": "https://auth.atlassian.com/oauth/token",
+        "clientId": "YOUR_ATLASSIAN_CLIENT_ID",
+        "scopes": ["read:jira-work", "read:confluence-space.summary", "read:confluence-content.all"],
+        "redirectUri": "http://localhost:17390/oauth/callback"
+      }
     }
   },
   "mcpSettings": {
