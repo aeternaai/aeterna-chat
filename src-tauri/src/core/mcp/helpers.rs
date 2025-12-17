@@ -8,6 +8,7 @@ use rmcp::{
 };
 use serde_json::Value;
 use std::{collections::HashMap, env, process::Stdio, sync::Arc, time::Duration};
+use uuid::Uuid;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_http::reqwest;
 use tokio::{
@@ -205,6 +206,38 @@ async fn server_has_oauth_token(
     app_state: &AppState,
     name: &str,
 ) -> bool {
+    // First check if this is an mcp-remote server (checks ~/.mcp-auth)
+    let active_servers = app_state.mcp_active_servers.lock().await;
+    if let Some(config) = active_servers.get(name) {
+        if let Some(config_params) = extract_command_args(config) {
+            // Check if server uses mcp-remote by looking at args
+            let uses_mcp_remote = config_params.args.iter().any(|arg| {
+                arg.as_str().map(|s| s.contains("mcp-remote")).unwrap_or(false)
+            });
+            
+            if uses_mcp_remote {
+                // For mcp-remote servers, check if ~/.mcp-auth exists and has content
+                if let Some(home_dir) = dirs::home_dir() {
+                    let mcp_auth_path = home_dir.join(".mcp-auth");
+                    if mcp_auth_path.exists() {
+                        // Check if directory has any files (mcp-remote stores tokens there)
+                        if let Ok(entries) = std::fs::read_dir(&mcp_auth_path) {
+                            let has_files = entries.filter_map(|e| e.ok()).any(|_| true);
+                            if has_files {
+                                log::debug!("MCP server {name} uses mcp-remote and has auth credentials in ~/.mcp-auth");
+                                return true;
+                            }
+                        }
+                    }
+                }
+                log::debug!("MCP server {name} uses mcp-remote but no auth credentials found in ~/.mcp-auth");
+                return false;
+            }
+        }
+    }
+    drop(active_servers);
+    
+    // For non-mcp-remote servers, check our OAuth token store
     let tokens = app_state.mcp_oauth_tokens.lock().await;
     if let Some(token) = tokens.get(name) {
         return !token.is_expired();
@@ -873,6 +906,9 @@ async fn schedule_mcp_start_task<R: Runtime>(
         if let Some(stderr_stream) = stderr_handle {
             let app_clone = app.clone();
             let name_clone = name.clone();
+            let monitor_id = uuid::Uuid::new_v4();
+            
+            log::info!("[OAuth Monitor] Starting stderr monitor {} for server {}", monitor_id, name_clone);
             
             tokio::spawn(async move {
                 use tokio::io::AsyncBufReadExt;
@@ -884,7 +920,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                     
                     // Detect OAuth authorization prompt
                     if line.contains("Please authorize this client by visiting:") {
-                        log::info!("MCP server {name_clone} requires OAuth authentication");
+                        log::info!("[OAuth Monitor {}] MCP server {name_clone} requires OAuth authentication", monitor_id);
                         
                         // Next line should contain the URL
                         if let Ok(Some(url_line)) = lines.next_line().await {
@@ -898,18 +934,20 @@ async fn schedule_mcp_start_task<R: Runtime>(
                                 if !was_opened {
                                     // Set flag immediately to block other concurrent tasks
                                     opened.insert(name_clone.clone(), true);
+                                    log::info!("[OAuth Monitor {}] First to detect OAuth for {}, proceeding", monitor_id, name_clone);
                                     true // We're the first, proceed with opening
                                 } else {
+                                    log::info!("[OAuth Monitor {}] OAuth already opened for {}, skipping", monitor_id, name_clone);
                                     false // Already opened by another task
                                 }
                             };
                             
                             if !should_open {
-                                log::debug!("OAuth URL for {name_clone} already opened by another task, skipping duplicate");
+                                log::debug!("[OAuth Monitor {}] OAuth URL for {name_clone} already opened by another task, skipping duplicate", monitor_id);
                                 continue;
                             }
                             
-                            log::info!("Opening OAuth URL for {name_clone}: {url}");
+                            log::info!("[OAuth Monitor {}] Opening OAuth URL for {name_clone}: {url}", monitor_id);
                             
                             // Emit event to frontend to open the OAuth URL
                             // The frontend will use @tauri-apps/plugin-opener which properly opens URLs
@@ -924,20 +962,35 @@ async fn schedule_mcp_start_task<R: Runtime>(
                         }
                     }
                     
-                    // Detect successful connection
+                    // Detect successful connection (guard against duplicate events)
                     if line.contains("Connected to remote server") || line.contains("Proxy established successfully") {
-                        log::info!("MCP server {name_clone} connected successfully after authentication");
+                        log::info!("[OAuth Monitor {}] MCP server {name_clone} connected successfully after authentication", monitor_id);
                         
-                        // Don't reset the OAuth URL flag here - it should only be reset when server
-                        // is explicitly stopped/restarted, not on successful connection.
-                        // This prevents re-prompting if the connection message appears before OAuth completes.
+                        // Atomic check-and-set to prevent duplicate connection events
+                        // (both "Connected to remote server" and "Proxy established" may appear)
+                        let app_state = app_clone.state::<AppState>();
+                        let should_emit = {
+                            let mut connected = app_state.mcp_successfully_connected.lock().await;
+                            let was_connected = connected.get(&name_clone).copied().unwrap_or(false);
+                            if !was_connected {
+                                connected.insert(name_clone.clone(), true);
+                                true // First connection message, emit event
+                            } else {
+                                false // Already emitted for this connection
+                            }
+                        };
                         
-                        let _ = app_clone.emit(
-                            "mcp_authenticated",
-                            serde_json::json!({
-                                "server": name_clone
-                            }),
-                        );
+                        if should_emit {
+                            log::info!("[OAuth Monitor {}] First connection message for {}, emitting event", monitor_id, name_clone);
+                            let _ = app_clone.emit(
+                                "mcp_authenticated",
+                                serde_json::json!({
+                                    "server": name_clone
+                                }),
+                            );
+                        } else {
+                            log::debug!("[OAuth Monitor {}] Duplicate connection message for {}, skipping event", monitor_id, name_clone);
+                        }
                     }
                 }
             });

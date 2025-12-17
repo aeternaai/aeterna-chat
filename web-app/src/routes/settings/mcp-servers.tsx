@@ -11,6 +11,7 @@ import {
   IconKey,
   IconKeyOff,
   IconDatabaseOff,
+  IconRefresh,
 } from '@tabler/icons-react'
 import {
   useMCPServers,
@@ -35,6 +36,11 @@ import { PlatformGuard } from '@/lib/platform/PlatformGuard'
 import { PlatformFeature } from '@/lib/platform'
 import { listen } from '@tauri-apps/api/event'
 import { SystemEvent } from '@/types/events'
+
+// Function to check if a server uses mcp-remote
+const usesMcpRemote = (config: MCPServerConfig) => {
+  return config.args?.some(arg => arg.includes('mcp-remote')) ?? false
+}
 
 // Function to mask sensitive values
 const maskSensitiveValue = (value: string) => {
@@ -142,9 +148,10 @@ function MCPServersDesktop() {
         hasOAuth: !!config.oauth,
         oauthConfig: config.oauth,
         active: config.active,
+        isAuthenticated: isAuthenticated(key),
       })
     })
-  }, [mcpServers])
+  }, [mcpServers, isAuthenticated])
 
   const [open, setOpen] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
@@ -535,28 +542,35 @@ function MCPServersDesktop() {
                             <span>Official</span>
                           </div>
                         )}
-                        {config.oauth && (
-                          <div
-                            className={twMerge(
-                              'flex items-center gap-1.5 px-2 py-0.5 text-xs rounded',
-                              isAuthenticated(key)
-                                ? 'bg-green-500/10 text-green-500'
-                                : 'bg-amber-500/10 text-amber-500'
-                            )}
-                          >
-                            {isAuthenticated(key) ? (
-                              <>
-                                <IconKey size={12} />
-                                <span>Authenticated</span>
-                              </>
-                            ) : (
-                              <>
-                                <IconKeyOff size={12} />
-                                <span>Auth Required</span>
-                              </>
-                            )}
-                          </div>
-                        )}
+                        {config.oauth && (() => {
+                          const authenticated = isAuthenticated(key)
+                          console.log(`[DEBUG OAuth UI Badge] Rendering badge for "${key}":`, {
+                            hasOAuth: !!config.oauth,
+                            authenticated,
+                          })
+                          return (
+                            <div
+                              className={twMerge(
+                                'flex items-center gap-1.5 px-2 py-0.5 text-xs rounded',
+                                authenticated
+                                  ? 'bg-green-500/10 text-green-500'
+                                  : 'bg-amber-500/10 text-amber-500'
+                              )}
+                            >
+                              {authenticated ? (
+                                <>
+                                  <IconKey size={12} />
+                                  <span>Authenticated</span>
+                                </>
+                              ) : (
+                                <>
+                                  <IconKeyOff size={12} />
+                                  <span>Auth Required</span>
+                                </>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </div>
                     }
                     descriptionOutside={
@@ -636,16 +650,33 @@ function MCPServersDesktop() {
                         {config.oauth && (
                           <>
                             {isAuthenticated(key) ? (
-                              <div
-                                className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out"
-                                onClick={() => revokeOAuthToken(key)}
-                                title={t('mcp-servers:oauth.revoke')}
-                              >
-                                <IconKeyOff
-                                  size={18}
-                                  className="text-red-500"
-                                />
-                              </div>
+                              <>
+                                {usesMcpRemote(config) ? (
+                                  // For mcp-remote servers, show refresh icon when authenticated
+                                  <div
+                                    className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out"
+                                    onClick={() => !oauthLoading && config.oauth && startOAuthFlow(key, config.oauth)}
+                                    title="Click to refresh credentials"
+                                  >
+                                    <IconRefresh
+                                      size={18}
+                                      className="text-green-500"
+                                    />
+                                  </div>
+                                ) : (
+                                  // For other OAuth servers, show revoke button
+                                  <div
+                                    className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out"
+                                    onClick={() => revokeOAuthToken(key)}
+                                    title={t('mcp-servers:oauth.revoke')}
+                                  >
+                                    <IconKeyOff
+                                      size={18}
+                                      className="text-red-500"
+                                    />
+                                  </div>
+                                )}
+                              </>
                             ) : (
                               <div
                                 className={twMerge(
@@ -664,7 +695,7 @@ function MCPServersDesktop() {
                           </>
                         )}
                         {/* Clear mcp-remote auth button - only show for servers using mcp-remote */}
-                        {config.args?.some(arg => arg.includes('mcp-remote')) && (
+                        {usesMcpRemote(config) && (
                           <div
                             className={twMerge(
                               'size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out',

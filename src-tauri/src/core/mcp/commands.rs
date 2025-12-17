@@ -7,7 +7,7 @@ use tokio::time::timeout;
 
 use super::{
     constants::DEFAULT_MCP_CONFIG,
-    helpers::{restart_active_mcp_servers, start_mcp_server_with_restart, stop_mcp_servers},
+    helpers::{extract_command_args, restart_active_mcp_servers, start_mcp_server_with_restart, stop_mcp_servers},
 };
 use crate::core::{
     app::commands::get_jan_data_folder_path,
@@ -18,7 +18,7 @@ use crate::core::{
     mcp::models::ToolWithServer,
     state::{RunningServiceEnum, SharedMcpServers},
 };
-use std::{fs, time::Duration};
+use std::{collections::HashMap, fs, time::Duration};
 
 /// OAuth flow result containing the authorization URL
 #[derive(Debug, Serialize, Deserialize)]
@@ -581,19 +581,92 @@ pub async fn revoke_mcp_oauth_token<R: Runtime>(
 #[tauri::command]
 pub async fn get_all_mcp_oauth_statuses<R: Runtime>(
     app: AppHandle<R>,
-) -> Result<Vec<OAuthStatus>, String> {
+) -> Result<HashMap<String, OAuthStatus>, String> {
+    log::info!("[OAuth Debug] get_all_mcp_oauth_statuses called");
     let state = app.state::<AppState>();
     let tokens = state.mcp_oauth_tokens.lock().await;
 
-    let statuses: Vec<OAuthStatus> = tokens
+    let mut statuses: HashMap<String, OAuthStatus> = tokens
         .iter()
-        .map(|(server_name, token)| OAuthStatus {
-            server_name: server_name.clone(),
-            authenticated: !token.is_expired(),
-            expires_at: Some(token.expires_at),
-            scopes: token.scopes.clone(),
+        .map(|(server_name, token)| {
+            log::info!("[OAuth Debug] Token store - server: {}, authenticated: {}", server_name, !token.is_expired());
+            (
+                server_name.clone(),
+                OAuthStatus {
+                    server_name: server_name.clone(),
+                    authenticated: !token.is_expired(),
+                    expires_at: Some(token.expires_at),
+                    scopes: token.scopes.clone(),
+                }
+            )
         })
         .collect();
+    
+    drop(tokens);
+    log::info!("[OAuth Debug] OAuth token store has {} entries", statuses.len());
+
+    // Check for mcp-remote servers that store auth in ~/.mcp-auth
+    let active_servers = state.mcp_active_servers.lock().await;
+    log::info!("[OAuth Debug] Active servers count: {}", active_servers.len());
+    
+    // Check if ~/.mcp-auth exists and has content
+    let mcp_remote_authenticated = if let Some(home_dir) = dirs::home_dir() {
+        let mcp_auth_path = home_dir.join(".mcp-auth");
+        log::info!("[OAuth Debug] Checking mcp-auth path: {:?}", mcp_auth_path);
+        if mcp_auth_path.exists() {
+            log::info!("[OAuth Debug] mcp-auth directory exists");
+            if let Ok(entries) = std::fs::read_dir(&mcp_auth_path) {
+                let has_files = entries.filter_map(|e| e.ok()).any(|_| true);
+                log::info!("[OAuth Debug] mcp-auth has files: {}", has_files);
+                has_files
+            } else {
+                log::warn!("[OAuth Debug] Could not read mcp-auth directory");
+                false
+            }
+        } else {
+            log::info!("[OAuth Debug] mcp-auth directory does not exist");
+            false
+        }
+    } else {
+        log::warn!("[OAuth Debug] Could not get home directory");
+        false
+    };
+    
+    // Check all active servers and override token store for mcp-remote servers
+    for (server_name, config) in active_servers.iter() {
+        log::info!("[OAuth Debug] Checking server: {}", server_name);
+        
+        // Check if this server uses mcp-remote
+        if let Some(config_params) = extract_command_args(config) {
+            let uses_mcp_remote = config_params.args.iter().any(|arg| {
+                arg.as_str().map(|s| s.contains("mcp-remote")).unwrap_or(false)
+            });
+            
+            log::info!("[OAuth Debug] Server {} uses mcp-remote: {}", server_name, uses_mcp_remote);
+            
+            if uses_mcp_remote {
+                // For mcp-remote servers, always use ~/.mcp-auth check (override token store)
+                log::info!("[OAuth Debug] Overriding token store status for mcp-remote server: {}", server_name);
+                statuses.insert(
+                    server_name.clone(),
+                    OAuthStatus {
+                        server_name: server_name.clone(),
+                        authenticated: mcp_remote_authenticated,
+                        expires_at: None,
+                        scopes: Vec::new(),
+                    }
+                );
+                log::info!("[OAuth Debug] Set mcp-remote server {} authenticated={}", server_name, mcp_remote_authenticated);
+            }
+        } else {
+            log::info!("[OAuth Debug] Could not extract command args for server: {}", server_name);
+        }
+    }
+
+    log::info!("[OAuth Debug] Returning {} OAuth statuses", statuses.len());
+    for (name, status) in statuses.iter() {
+        log::info!("[OAuth Debug] Status - {}: authenticated={}", name, status.authenticated);
+    }
 
     Ok(statuses)
 }

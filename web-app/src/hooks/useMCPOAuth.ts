@@ -33,7 +33,13 @@ export function useMCPOAuth(): UseMCPOAuthReturn {
   // Load all OAuth statuses
   const refreshStatuses = useCallback(async () => {
     try {
+      console.log('[OAuth Debug Frontend] Fetching OAuth statuses...')
       const statuses = await getServiceHub().mcp().getAllOAuthStatuses()
+      console.log('[OAuth Debug Frontend] Received OAuth statuses:', statuses)
+      console.log('[OAuth Debug Frontend] Number of statuses:', Object.keys(statuses).length)
+      Object.entries(statuses).forEach(([name, status]) => {
+        console.log(`[OAuth Debug Frontend] ${name}: authenticated=${status.authenticated}`)
+      })
       setOAuthStatuses(statuses)
     } catch (error) {
       console.error('Failed to load OAuth statuses:', error)
@@ -47,11 +53,26 @@ export function useMCPOAuth(): UseMCPOAuthReturn {
 
   // Listen for OAuth required events (when backend detects OAuth prompt from mcp-remote)
   useEffect(() => {
+    // Track recently opened URLs to prevent duplicates
+    const recentlyOpened = new Map<string, number>()
+    const DEBOUNCE_MS = 5000 // Don't open same URL within 5 seconds
+    
     const unlisten = listen<{ server: string; url: string }>(
       'mcp_oauth_required',
       async (event) => {
         const { server, url } = event.payload
         console.log(`[OAuth] Backend detected OAuth required for ${server}, opening URL:`, url)
+        
+        // Check if we recently opened this URL
+        const lastOpened = recentlyOpened.get(url)
+        const now = Date.now()
+        if (lastOpened && (now - lastOpened) < DEBOUNCE_MS) {
+          console.log(`[OAuth] URL for ${server} was recently opened (${now - lastOpened}ms ago), skipping duplicate`)
+          return
+        }
+        
+        // Record this opening
+        recentlyOpened.set(url, now)
         
         try {
           await openUrl(url)
@@ -122,8 +143,8 @@ export function useMCPOAuth(): UseMCPOAuthReturn {
     }
   }, [])
 
-  // Start OAuth flow for a server
-  const startOAuthFlow = useCallback(async (serverName: string, oauthConfig: {
+  // Start OAuth flow for a server (triggers mcp-remote OAuth by clearing credentials and restarting)
+  const startOAuthFlow = useCallback(async (serverName: string, _oauthConfig: {
     client_id: string
     auth_url: string
     token_url: string
@@ -132,35 +153,39 @@ export function useMCPOAuth(): UseMCPOAuthReturn {
   }) => {
     setIsLoading(true)
     try {
-      console.log('[OAuth] Starting flow for server:', serverName)
-      console.log('[OAuth] OAuth config:', oauthConfig)
+      console.log('[OAuth] Starting OAuth flow for server:', serverName)
+      console.log('[OAuth] Triggering mcp-remote authentication by clearing credentials and restarting server')
       
-      // Request OAuth flow start from backend
-      const result = await getServiceHub().mcp().startOAuthFlow(serverName, oauthConfig)
+      // Clear mcp-remote credentials
+      await getServiceHub().mcp().clearMcpRemoteAuth()
+      console.log('[OAuth] Cleared mcp-remote credentials')
       
-      console.log('[OAuth] Received result from backend:', result)
-      console.log('[OAuth] Auth URL:', result.authUrl)
-      console.log('[OAuth] Result type:', typeof result)
-      console.log('[OAuth] Result keys:', Object.keys(result || {}))
+      // Deactivate the server
+      await getServiceHub().mcp().deactivateMCPServer(serverName)
+      console.log('[OAuth] Deactivated server:', serverName)
       
-      // Open the authorization URL in browser
-      if (result && result.authUrl) {
-        console.log('[OAuth] Opening browser with URL:', result.authUrl)
-        try {
-          await openUrl(result.authUrl)
-          console.log('[OAuth] Successfully opened browser')
-          toast.info(`Please complete authentication in your browser for ${serverName}`)
-        } catch (error) {
-          console.error('[OAuth] Failed to open browser:', error)
-          toast.error('Failed to open browser. Please try again.')
-        }
-      } else {
-        console.error('[OAuth] No authUrl in result:', result)
-        toast.error('Failed to get authorization URL from server')
+      // Wait a moment for clean shutdown
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Get the server config to reactivate it
+      const config = await getServiceHub().mcp().getMCPConfig()
+      const serverConfig = config.mcpServers?.[serverName]
+      
+      if (!serverConfig) {
+        throw new Error(`Server configuration not found for ${serverName}`)
       }
+      
+      // Reactivate the server - this will trigger mcp-remote to detect missing auth and prompt
+      await getServiceHub().mcp().activateMCPServer(serverName, {
+        ...serverConfig,
+        active: true
+      })
+      console.log('[OAuth] Reactivated server:', serverName)
+      
+      toast.info(`Authenticating ${serverName}. The browser will open automatically.`)
     } catch (error) {
-      console.error('[OAuth] Failed to start OAuth flow:', error)
-      toast.error(`Failed to start OAuth flow: ${error}`)
+      console.error('[OAuth] Failed to trigger OAuth flow:', error)
+      toast.error(`Failed to start authentication: ${error}`)
     } finally {
       setIsLoading(false)
     }
@@ -202,7 +227,13 @@ export function useMCPOAuth(): UseMCPOAuthReturn {
   // Check if a server is authenticated
   const isAuthenticated = useCallback((serverName: string): boolean => {
     const status = oauthStatuses[serverName]
-    return status?.authenticated ?? false
+    const result = status?.authenticated ?? false
+    console.log(`[OAuth Debug Frontend] isAuthenticated(${serverName}):`, {
+      hasStatus: !!status,
+      status,
+      result
+    })
+    return result
   }, [oauthStatuses])
 
   return {
