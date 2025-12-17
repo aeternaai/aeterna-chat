@@ -145,6 +145,7 @@ pub fn run() {
             mcp_oauth_tokens: Arc::new(Mutex::new(HashMap::new())),
             mcp_oauth_pending: Arc::new(Mutex::new(HashMap::new())),
             mcp_oauth_server: Arc::new(Mutex::new(None)),
+            mcp_oauth_url_opened: Arc::new(Mutex::new(HashMap::new())),
             router_process: Arc::new(Mutex::new(None)),
             router_config: Arc::new(Mutex::new(RouterConfig::default())),
         })

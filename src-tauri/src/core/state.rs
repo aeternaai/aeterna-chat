@@ -39,6 +39,7 @@ pub struct AppState {
     pub mcp_oauth_tokens: Arc<Mutex<HashMap<String, OAuthToken>>>,
     pub mcp_oauth_pending: Arc<Mutex<HashMap<String, PendingOAuthFlow>>>,
     pub mcp_oauth_server: Arc<Mutex<Option<JoinHandle<()>>>>,
+    pub mcp_oauth_url_opened: Arc<Mutex<HashMap<String, bool>>>, // Track if OAuth URL already opened for a server
     // Router service state
     pub router_process: Arc<Mutex<Option<Child>>>,
     pub router_config: Arc<Mutex<RouterConfig>>,

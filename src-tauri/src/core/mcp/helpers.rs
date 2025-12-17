@@ -518,6 +518,15 @@ async fn schedule_mcp_start_task<R: Runtime>(
     name: String,
     config: Value,
 ) -> Result<(), String> {
+    // Reset OAuth URL opened flag when starting/restarting a server
+    // This allows the server to prompt for OAuth if needed after a restart
+    let app_state = app.state::<AppState>();
+    {
+        let mut opened = app_state.mcp_oauth_url_opened.lock().await;
+        opened.insert(name.clone(), false);
+        log::debug!("Reset OAuth URL opened flag for server: {}", name);
+    }
+    
     let app_path = get_jan_data_folder_path(app.clone());
     let exe_path = env::current_exe().expect("Failed to get current exe path");
     let exe_parent_path = exe_path
@@ -876,17 +885,35 @@ async fn schedule_mcp_start_task<R: Runtime>(
                     // Detect OAuth authorization prompt
                     if line.contains("Please authorize this client by visiting:") {
                         log::info!("MCP server {name_clone} requires OAuth authentication");
+                        
                         // Next line should contain the URL
                         if let Ok(Some(url_line)) = lines.next_line().await {
-                            let url = url_line.trim();
-                            log::info!("Opening OAuth URL for {name_clone}: {url}");
+                            let url = url_line.trim().to_string();
                             
-                            // Try to open the URL in the default browser
-                            if let Err(e) = open::that(url) {
-                                log::error!("Failed to open browser for OAuth: {e}");
+                            // Atomic check-and-set: Only proceed if we haven't opened URL yet
+                            let app_state = app_clone.state::<AppState>();
+                            let should_open = {
+                                let mut opened = app_state.mcp_oauth_url_opened.lock().await;
+                                let was_opened = opened.get(&name_clone).copied().unwrap_or(false);
+                                if !was_opened {
+                                    // Set flag immediately to block other concurrent tasks
+                                    opened.insert(name_clone.clone(), true);
+                                    true // We're the first, proceed with opening
+                                } else {
+                                    false // Already opened by another task
+                                }
+                            };
+                            
+                            if !should_open {
+                                log::debug!("OAuth URL for {name_clone} already opened by another task, skipping duplicate");
+                                continue;
                             }
                             
-                            // Emit event to frontend with OAuth URL
+                            log::info!("Opening OAuth URL for {name_clone}: {url}");
+                            
+                            // Emit event to frontend to open the OAuth URL
+                            // The frontend will use @tauri-apps/plugin-opener which properly opens URLs
+                            // in the system browser from a Tauri app
                             let _ = app_clone.emit(
                                 "mcp_oauth_required",
                                 serde_json::json!({
@@ -900,6 +927,11 @@ async fn schedule_mcp_start_task<R: Runtime>(
                     // Detect successful connection
                     if line.contains("Connected to remote server") || line.contains("Proxy established successfully") {
                         log::info!("MCP server {name_clone} connected successfully after authentication");
+                        
+                        // Don't reset the OAuth URL flag here - it should only be reset when server
+                        // is explicitly stopped/restarted, not on successful connection.
+                        // This prevents re-prompting if the connection message appears before OAuth completes.
+                        
                         let _ = app_clone.emit(
                             "mcp_authenticated",
                             serde_json::json!({

@@ -45,6 +45,30 @@ export function useMCPOAuth(): UseMCPOAuthReturn {
     refreshStatuses()
   }, [refreshStatuses])
 
+  // Listen for OAuth required events (when backend detects OAuth prompt from mcp-remote)
+  useEffect(() => {
+    const unlisten = listen<{ server: string; url: string }>(
+      'mcp_oauth_required',
+      async (event) => {
+        const { server, url } = event.payload
+        console.log(`[OAuth] Backend detected OAuth required for ${server}, opening URL:`, url)
+        
+        try {
+          await openUrl(url)
+          console.log(`[OAuth] Successfully opened OAuth URL for ${server}`)
+          toast.info(`Please complete authentication in your browser for ${server}`)
+        } catch (error) {
+          console.error(`[OAuth] Failed to open OAuth URL for ${server}:`, error)
+          toast.error(`Failed to open browser for ${server}. Please try again.`)
+        }
+      }
+    )
+
+    return () => {
+      unlisten.then(fn => fn())
+    }
+  }, [])
+
   // Listen for OAuth completion events
   useEffect(() => {
     const unlisten = listen<{ server_name: string; authenticated: boolean; expires_at?: number }>(

@@ -92,6 +92,13 @@ pub async fn deactivate_mcp_server<R: Runtime>(
         log::info!("Reset restart count for MCP server {name}");
     }
 
+    // Reset OAuth URL opened flag
+    {
+        let mut opened = state.mcp_oauth_url_opened.lock().await;
+        opened.remove(&name);
+        log::info!("Reset OAuth URL opened flag for MCP server {name}");
+    }
+
     // Now remove and stop the server
     let servers = state.mcp_servers.clone();
     let mut servers_map = servers.lock().await;
@@ -594,7 +601,7 @@ pub async fn get_all_mcp_oauth_statuses<R: Runtime>(
 /// Clear MCP remote auth folder (~/.mcp-auth)
 /// This is useful for MCP servers that use mcp-remote for OAuth
 #[tauri::command]
-pub async fn clear_mcp_remote_auth() -> Result<(), String> {
+pub async fn clear_mcp_remote_auth<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     let home_dir = dirs::home_dir()
         .ok_or_else(|| "Failed to get home directory".to_string())?;
     
@@ -615,7 +622,14 @@ pub async fn clear_mcp_remote_auth() -> Result<(), String> {
     fs::create_dir(&mcp_auth_path)
         .map_err(|e| format!("Failed to recreate MCP auth folder: {}", e))?;
     
-    log::info!("Successfully cleared MCP remote auth folder");
+    // Reset all OAuth URL opened flags so servers can prompt again
+    let state = app.state::<AppState>();
+    {
+        let mut opened = state.mcp_oauth_url_opened.lock().await;
+        opened.clear();
+    }
+    
+    log::info!("Successfully cleared MCP remote auth folder and reset OAuth flags");
     Ok(())
 }
 
