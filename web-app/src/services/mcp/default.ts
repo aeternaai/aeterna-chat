@@ -4,6 +4,7 @@
 
 import { MCPTool, MCPToolCallResult } from '@janhq/core'
 import type { MCPServerConfig } from '@/hooks/useMCPServers'
+import type { OAuthStatus, OAuthFlowResult } from '@/types/oauth'
 import type { MCPService, MCPConfig, ToolCallWithCancellationResult } from './types'
 
 export class DefaultMCPService implements MCPService {
@@ -64,6 +65,37 @@ export class DefaultMCPService implements MCPService {
 
   async deactivateMCPServer(name: string): Promise<void> {
     console.log('deactivateMCPServer called with name:', name)
+    // No-op - not implemented in default service
+  }
+
+  async startOAuthFlow(serverName: string, oauthConfig: {
+    client_id: string
+    auth_url: string
+    token_url: string
+    scopes: string[]
+    redirect_uri?: string
+  }): Promise<OAuthFlowResult> {
+    console.log('startOAuthFlow called with serverName:', serverName, 'oauthConfig:', oauthConfig)
+    return { auth_url: '' }
+  }
+
+  async getOAuthStatus(serverName: string): Promise<OAuthStatus> {
+    console.log('getOAuthStatus called with serverName:', serverName)
+    return { authenticated: false, server_name: serverName }
+  }
+
+  async getAllOAuthStatuses(): Promise<Record<string, OAuthStatus>> {
+    console.log('getAllOAuthStatuses called')
+    return {}
+  }
+
+  async revokeOAuthToken(serverName: string): Promise<void> {
+    console.log('revokeOAuthToken called with serverName:', serverName)
+    // No-op - not implemented in default service
+  }
+
+  async clearMcpRemoteAuth(): Promise<void> {
+    console.log('clearMcpRemoteAuth called')
     // No-op - not implemented in default service
   }
 }

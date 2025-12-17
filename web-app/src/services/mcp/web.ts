@@ -5,6 +5,7 @@
  */
 
 import type { MCPServerConfig } from '@/hooks/useMCPServers'
+import type { OAuthStatus, OAuthFlowResult } from '@/types/oauth'
 import type { MCPService, MCPConfig, ToolCallWithCancellationResult } from './types'
 import { ExtensionManager } from '@/lib/extension'
 import { ExtensionTypeEnum, MCPExtension, MCPTool, MCPToolCallResult } from '@janhq/core'
@@ -275,5 +276,32 @@ export class WebMCPService implements MCPService {
 
   private generateCancellationToken(): string {
     return `mcp_cancel_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+  }
+
+  // OAuth methods - not available on web platform
+  async startOAuthFlow(serverName: string, oauthConfig: {
+    client_id: string
+    auth_url: string
+    token_url: string
+    scopes: string[]
+    redirect_uri?: string
+  }): Promise<OAuthFlowResult> {
+    console.log('startOAuthFlow not available on web platform:', serverName, oauthConfig)
+    throw new Error('OAuth authentication is only available in the desktop version')
+  }
+
+  async getOAuthStatus(serverName: string): Promise<OAuthStatus> {
+    console.log('getOAuthStatus not available on web platform:', serverName)
+    return { authenticated: false, server_name: serverName }
+  }
+
+  async getAllOAuthStatuses(): Promise<Record<string, OAuthStatus>> {
+    console.log('getAllOAuthStatuses not available on web platform')
+    return {}
+  }
+
+  async revokeOAuthToken(serverName: string): Promise<void> {
+    console.log('revokeOAuthToken not available on web platform:', serverName)
+    throw new Error('OAuth authentication is only available in the desktop version')
   }
 }

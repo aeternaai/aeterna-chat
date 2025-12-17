@@ -8,10 +8,10 @@ use rmcp::{
 };
 use serde_json::Value;
 use std::{collections::HashMap, env, process::Stdio, sync::Arc, time::Duration};
+use uuid::Uuid;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tauri_plugin_http::reqwest;
 use tokio::{
-    io::AsyncReadExt,
     process::Command,
     sync::Mutex,
     time::{sleep, timeout},
@@ -187,29 +187,104 @@ pub async fn run_mcp_commands<R: Runtime>(
 }
 
 /// Monitor MCP server health without removing it from the HashMap
-pub async fn monitor_mcp_server_handle(
+/// Check if MCP server requires OAuth authentication
+async fn server_requires_oauth(
+    active_servers_state: &Arc<Mutex<HashMap<String, Value>>>,
+    name: &str,
+) -> bool {
+    let servers = active_servers_state.lock().await;
+    if let Some(config) = servers.get(name) {
+        if let Some(config_params) = extract_command_args(config) {
+            return config_params.oauth_config.is_some();
+        }
+    }
+    false
+}
+
+/// Check if MCP server has valid OAuth token
+async fn server_has_oauth_token(
+    app_state: &AppState,
+    name: &str,
+) -> bool {
+    // First check if this is an mcp-remote server (checks ~/.mcp-auth)
+    let active_servers = app_state.mcp_active_servers.lock().await;
+    if let Some(config) = active_servers.get(name) {
+        if let Some(config_params) = extract_command_args(config) {
+            // Check if server uses mcp-remote by looking at args
+            let uses_mcp_remote = config_params.args.iter().any(|arg| {
+                arg.as_str().map(|s| s.contains("mcp-remote")).unwrap_or(false)
+            });
+            
+            if uses_mcp_remote {
+                // For mcp-remote servers, check if ~/.mcp-auth exists and has content
+                if let Some(home_dir) = dirs::home_dir() {
+                    let mcp_auth_path = home_dir.join(".mcp-auth");
+                    if mcp_auth_path.exists() {
+                        // Check if directory has any files (mcp-remote stores tokens there)
+                        if let Ok(entries) = std::fs::read_dir(&mcp_auth_path) {
+                            let has_files = entries.filter_map(|e| e.ok()).any(|_| true);
+                            if has_files {
+                                log::debug!("MCP server {name} uses mcp-remote and has auth credentials in ~/.mcp-auth");
+                                return true;
+                            }
+                        }
+                    }
+                }
+                log::debug!("MCP server {name} uses mcp-remote but no auth credentials found in ~/.mcp-auth");
+                return false;
+            }
+        }
+    }
+    drop(active_servers);
+    
+    // For non-mcp-remote servers, check our OAuth token store
+    let tokens = app_state.mcp_oauth_tokens.lock().await;
+    if let Some(token) = tokens.get(name) {
+        return !token.is_expired();
+    }
+    false
+}
+
+pub async fn monitor_mcp_server_handle<R: Runtime>(
+    app: AppHandle<R>,
     servers_state: SharedMcpServers,
     name: String,
 ) -> Option<rmcp::service::QuitReason> {
     log::info!("Monitoring MCP server {name} health");
+    
+    let app_state = app.state::<AppState>();
+    let active_servers = app_state.mcp_active_servers.clone();
 
     // Monitor server health with periodic checks
     loop {
         // Small delay between health checks
         sleep(Duration::from_secs(5)).await;
 
+        // Skip health check if server requires OAuth but isn't authenticated yet
+        let requires_oauth = server_requires_oauth(&active_servers, &name).await;
+        let has_oauth_token = server_has_oauth_token(&app_state, &name).await;
+        
+        if requires_oauth && !has_oauth_token {
+            log::debug!("MCP server {name} requires OAuth authentication - skipping health check until authenticated");
+            continue;
+        }
+
         // Check if server is still healthy by trying to list tools
         let health_check_result = {
             let servers = servers_state.lock().await;
             if let Some(service) = servers.get(&name) {
-                // Try to list tools as a health check with a short timeout
-                match timeout(Duration::from_secs(2), service.list_all_tools()).await {
+                // Try to list tools as a health check with a timeout
+                // Use longer timeout (30s) for servers that may need OAuth/network latency
+                match timeout(Duration::from_secs(30), service.list_all_tools()).await {
                     Ok(Ok(_)) => {
                         // Server responded successfully
                         true
                     }
                     Ok(Err(e)) => {
                         log::warn!("MCP server {name} health check failed: {e}");
+                        if e.to_string().contains("Transport closed") {
+                            log::error!("MCP server {name} transport closed unexpectedly. This might be due to: 1. OAuth token expiration/invalidation 2. Network interruption 3. Server-side timeout");
+                        }
                         false
                     }
                     Err(_) => {
@@ -413,7 +488,7 @@ pub async fn start_restart_loop<R: Runtime>(
 
                 // Monitor the server again
                 let quit_reason =
-                    monitor_mcp_server_handle(servers_state.clone(), name.clone()).await;
+                    monitor_mcp_server_handle(app.clone(), servers_state.clone(), name.clone()).await;
 
                 log::info!("MCP server {name} quit with reason: {quit_reason:?}");
 
@@ -476,6 +551,15 @@ async fn schedule_mcp_start_task<R: Runtime>(
     name: String,
     config: Value,
 ) -> Result<(), String> {
+    // Reset OAuth URL opened flag when starting/restarting a server
+    // This allows the server to prompt for OAuth if needed after a restart
+    let app_state = app.state::<AppState>();
+    {
+        let mut opened = app_state.mcp_oauth_url_opened.lock().await;
+        opened.insert(name.clone(), false);
+        log::debug!("Reset OAuth URL opened flag for server: {}", name);
+    }
+    
     let app_path = get_jan_data_folder_path(app.clone());
     let exe_path = env::current_exe().expect("Failed to get current exe path");
     let exe_parent_path = exe_path
@@ -487,11 +571,43 @@ async fn schedule_mcp_start_task<R: Runtime>(
         .ok_or_else(|| format!("Failed to extract command args from config for {name}"))?;
 
     if config_params.transport_type.as_deref() == Some("http") && config_params.url.is_some() {
+        // Get OAuth token if configured
+        let oauth_token = if let Some(ref oauth_config) = config_params.oauth_config {
+            use crate::core::mcp::oauth::get_oauth_token;
+            match get_oauth_token(app.clone(), &name, oauth_config).await {
+                Ok(Some(token)) => {
+                    log::info!("Using OAuth token for MCP server: {}", name);
+                    Some(token)
+                }
+                Ok(None) => {
+                    log::warn!("No OAuth token available for MCP server: {}", name);
+                    return Err(format!(
+                        "MCP server {} requires OAuth authentication. Please authenticate first.",
+                        name
+                    ));
+                }
+                Err(e) => {
+                    log::error!("Failed to get OAuth token for {}: {}", name, e);
+                    return Err(format!("OAuth error for {}: {}", name, e));
+                }
+            }
+        } else {
+            None
+        };
+
         let transport = StreamableHttpClientTransport::with_client(
             reqwest::Client::builder()
                 .default_headers({
                     // Map envs to request headers
                     let mut headers: tauri::http::HeaderMap = reqwest::header::HeaderMap::new();
+                    
+                    // Add OAuth Authorization header if available
+                    if let Some(ref token) = oauth_token {
+                        if let Ok(header_value) = reqwest::header::HeaderValue::from_str(token) {
+                            headers.insert(reqwest::header::AUTHORIZATION, header_value);
+                        }
+                    }
+                    
                     for (key, value) in config_params.headers.iter() {
                         if let Some(v_str) = value.as_str() {
                             // Try to map env keys to HTTP header names (case-insensitive)
@@ -557,11 +673,81 @@ async fn schedule_mcp_start_task<R: Runtime>(
         }
     } else if config_params.transport_type.as_deref() == Some("sse") && config_params.url.is_some()
     {
+        // Get OAuth token if configured
+        let oauth_token = if let Some(ref oauth_config) = config_params.oauth_config {
+            use crate::core::mcp::oauth::get_oauth_token;
+            match get_oauth_token(app.clone(), &name, oauth_config).await {
+                Ok(Some(token)) => {
+                    log::info!("Using OAuth token for MCP server: {}", name);
+                    Some(token)
+                }
+                Ok(None) => {
+                    log::warn!("No OAuth token available for MCP server: {}", name);
+                    return Err(format!(
+                        "MCP server {} requires OAuth authentication. Please authenticate first.",
+                        name
+                    ));
+                }
+                Err(e) => {
+                    log::error!("Failed to get OAuth token for {}: {}", name, e);
+                    return Err(format!("OAuth error for {}: {}", name, e));
+                }
+            }
+        } else {
+            None
+        };
+
+        // Perform a debug HTTP request to check the endpoint status
+        if let Some(url) = &config_params.url {
+            log::info!("Performing debug HTTP request to SSE endpoint: {}", url);
+            let client = reqwest::Client::new();
+            let mut request = client.get(url);
+            
+            if let Some(ref token) = oauth_token {
+                request = request.header("Authorization", token);
+            }
+            
+            for (key, value) in config_params.headers.iter() {
+                if let Some(v_str) = value.as_str() {
+                    request = request.header(key, v_str);
+                }
+            }
+
+            match request.send().await {
+                Ok(response) => {
+                    log::info!("Debug HTTP request status: {}", response.status());
+                    if !response.status().is_success() {
+                        let body = response.text().await.unwrap_or_default();
+                        log::error!("Debug HTTP request failed body: {}", body);
+                    } else {
+                        // Log headers to see if it's actually an event stream
+                        log::info!("Debug HTTP request headers: {:?}", response.headers());
+                    }
+                }
+                Err(e) => {
+                    log::error!("Debug HTTP request failed: {}", e);
+                }
+            }
+        }
+
         let transport = SseClientTransport::start_with_client(
             reqwest::Client::builder()
                 .default_headers({
                     // Map envs to request headers
                     let mut headers = reqwest::header::HeaderMap::new();
+                    
+                    // Add OAuth Authorization header if available
+                    if let Some(ref token) = oauth_token {
+                        log::info!("Adding Authorization header to SSE request for {}", name);
+                        if let Ok(header_value) = reqwest::header::HeaderValue::from_str(token) {
+                            headers.insert(reqwest::header::AUTHORIZATION, header_value);
+                        } else {
+                            log::error!("Failed to create Authorization header value from token");
+                        }
+                    } else {
+                        log::info!("No OAuth token to add to SSE request for {}", name);
+                    }
+                    
                     for (key, value) in config_params.headers.iter() {
                         if let Some(v_str) = value.as_str() {
                             // Try to map env keys to HTTP header names (case-insensitive)
@@ -583,7 +769,7 @@ async fn schedule_mcp_start_task<R: Runtime>(
                 .build()
                 .unwrap(),
             rmcp::transport::sse_client::SseClientConfig {
-                sse_endpoint: config_params.url.unwrap().into(),
+                sse_endpoint: config_params.url.clone().unwrap().into(),
                 ..Default::default()
             },
         )
@@ -700,19 +886,118 @@ async fn schedule_mcp_start_task<R: Runtime>(
             .for_each(|arg| {
                 cmd.arg(arg);
             });
+        
         config_params.envs.iter().for_each(|(k, v)| {
             if let Some(v_str) = v.as_str() {
                 cmd.env(k, v_str);
             }
         });
 
-        let (process, stderr) = TokioChildProcess::builder(cmd)
+        let (process, mut stderr) = TokioChildProcess::builder(cmd)
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| {
                 log::error!("Failed to run command {name}: {e}");
                 format!("Failed to run command {name}: {e}")
             })?;
+
+        // Monitor stderr for OAuth authentication prompts (for mcp-remote and similar tools)
+        let stderr_handle = stderr.take();
+        if let Some(stderr_stream) = stderr_handle {
+            let app_clone = app.clone();
+            let name_clone = name.clone();
+            let monitor_id = uuid::Uuid::new_v4();
+            
+            log::info!("[OAuth Monitor] Starting stderr monitor {} for server {}", monitor_id, name_clone);
+            
+            tokio::spawn(async move {
+                use tokio::io::AsyncBufReadExt;
+                let reader = tokio::io::BufReader::new(stderr_stream);
+                let mut lines = reader.lines();
+                
+                while let Ok(Some(line)) = lines.next_line().await {
+                    log::debug!("[{name_clone}] {line}");
+                    
+                    // Detect OAuth authorization prompt
+                    if line.contains("Please authorize this client by visiting:") {
+                        log::info!("[OAuth Monitor {}] MCP server {name_clone} requires OAuth authentication", monitor_id);
+                        
+                        // Next line should contain the URL
+                        if let Ok(Some(url_line)) = lines.next_line().await {
+                            let url = url_line.trim().to_string();
+                            
+                            // Atomic check-and-set: Only proceed if we haven't opened URL yet
+                            let app_state = app_clone.state::<AppState>();
+                            let should_open = {
+                                let mut opened = app_state.mcp_oauth_url_opened.lock().await;
+                                let was_opened = opened.get(&name_clone).copied().unwrap_or(false);
+                                if !was_opened {
+                                    // Set flag immediately to block other concurrent tasks
+                                    opened.insert(name_clone.clone(), true);
+                                    log::info!("[OAuth Monitor {}] First to detect OAuth for {}, proceeding", monitor_id, name_clone);
+                                    true // We're the first, proceed with opening
+                                } else {
+                                    log::info!("[OAuth Monitor {}] OAuth already opened for {}, skipping", monitor_id, name_clone);
+                                    false // Already opened by another task
+                                }
+                            };
+                            
+                            if !should_open {
+                                log::debug!("[OAuth Monitor {}] OAuth URL for {name_clone} already opened by another task, skipping duplicate", monitor_id);
+                                continue;
+                            }
+                            
+                            log::info!("[OAuth Monitor {}] Opening OAuth URL for {name_clone}: {url}", monitor_id);
+                            
+                            // Emit event to frontend to open the OAuth URL
+                            // The frontend will use @tauri-apps/plugin-opener which properly opens URLs
+                            // in the system browser from a Tauri app
+                            let _ = app_clone.emit(
+                                "mcp_oauth_required",
+                                serde_json::json!({
+                                    "server": name_clone,
+                                    "url": url
+                                }),
+                            );
+                        }
+                    }
+                    
+                    // Detect successful connection (guard against duplicate events)
+                    if line.contains("Connected to remote server") || line.contains("Proxy established successfully") {
+                        log::info!("[OAuth Monitor {}] MCP server {name_clone} connected successfully after authentication", monitor_id);
+                        
+                        // Atomic check-and-set to prevent duplicate connection events
+                        // (both "Connected to remote server" and "Proxy established" may appear)
+                        let app_state = app_clone.state::<AppState>();
+                        let should_emit = {
+                            let mut connected = app_state.mcp_successfully_connected.lock().await;
+                            let was_connected = connected.get(&name_clone).copied().unwrap_or(false);
+                            if !was_connected {
+                                connected.insert(name_clone.clone(), true);
+                                true // First connection message, emit event
+                            } else {
+                                false // Already emitted for this connection
+                            }
+                        };
+                        
+                        if should_emit {
+                            log::info!("[OAuth Monitor {}] First connection message for {}, emitting event", monitor_id, name_clone);
+                            let _ = app_clone.emit(
+                                "mcp_authenticated",
+                                serde_json::json!({
+                                    "server": name_clone
+                                }),
+                            );
+                        } else {
+                            log::debug!("[OAuth Monitor {}] Duplicate connection message for {}, skipping event", monitor_id, name_clone);
+                        }
+                    }
+                }
+            });
+        }
+
+        // Give the server a moment to start and potentially prompt for auth
+        sleep(Duration::from_millis(1000)).await;
 
         let service = ()
             .serve(process)
@@ -728,18 +1013,9 @@ async fn schedule_mcp_start_task<R: Runtime>(
                     .insert(name.clone(), RunningServiceEnum::NoInit(server));
                 log::info!("Server {name} started successfully.");
             }
-            Err(_) => {
-                let mut buffer = String::new();
-                let error = match stderr
-                    .expect("stderr must be piped")
-                    .read_to_string(&mut buffer)
-                    .await
-                {
-                    Ok(_) => format!("Failed to start MCP server {name}: {buffer}"),
-                    Err(_) => format!("Failed to read MCP server {name} stderr"),
-                };
-                log::error!("{error}");
-                return Err(error);
+            Err(e) => {
+                log::error!("Failed to start MCP server {name}: {e}");
+                return Err(format!("Failed to start MCP server {name}: {e}"));
             }
         }
 
@@ -817,6 +1093,12 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
         .unwrap_or(&Value::Object(serde_json::Map::new()))
         .as_object()?
         .clone();
+    
+    // Extract OAuth config if present
+    let oauth_config = obj
+        .get("oauth")
+        .and_then(|oauth| serde_json::from_value(oauth.clone()).ok());
+    
     Some(McpServerConfig {
         timeout,
         transport_type,
@@ -825,6 +1107,7 @@ pub fn extract_command_args(config: &Value) -> Option<McpServerConfig> {
         args,
         envs,
         headers,
+        oauth_config,
     })
 }
 
@@ -1090,7 +1373,7 @@ pub async fn spawn_server_monitoring_task<R: Runtime>(
     tauri::async_runtime::spawn(async move {
         // Monitor the server using RunningService's JoinHandle<QuitReason>
         let quit_reason =
-            monitor_mcp_server_handle(servers_clone.clone(), name_clone.clone()).await;
+            monitor_mcp_server_handle(app_clone.clone(), servers_clone.clone(), name_clone.clone()).await;
 
         log::info!(
             "MCP server {name_clone} quit with reason: {quit_reason:?}"

@@ -3,6 +3,59 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// OAuth configuration for MCP servers requiring authentication
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthConfig {
+    /// OAuth 2.0 authorization endpoint
+    pub auth_url: String,
+    /// OAuth 2.0 token endpoint
+    pub token_url: String,
+    /// Client ID for the OAuth application
+    pub client_id: String,
+    /// Optional client secret (for confidential clients)
+    pub client_secret: Option<String>,
+    /// OAuth scopes to request
+    pub scopes: Vec<String>,
+    /// Redirect URI for OAuth callback (defaults to http://localhost:PORT/callback)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub redirect_uri: Option<String>,
+}
+
+/// OAuth token storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthToken {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub token_type: String,
+    pub expires_at: i64, // Unix timestamp
+    pub scopes: Vec<String>,
+}
+
+impl OAuthToken {
+    /// Check if the token is expired or about to expire (within 5 minutes)
+    pub fn is_expired(&self) -> bool {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        
+        // Consider expired if less than 5 minutes remaining
+        self.expires_at < now + 300
+    }
+}
+
+/// OAuth authentication status for an MCP server
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthStatus {
+    pub server_name: String,
+    pub authenticated: bool,
+    pub expires_at: Option<i64>,
+    pub scopes: Vec<String>,
+}
+
 /// Configuration parameters extracted from MCP server config
 #[derive(Debug, Clone)]
 pub struct McpServerConfig {
@@ -13,6 +66,7 @@ pub struct McpServerConfig {
     pub envs: serde_json::Map<String, Value>,
     pub timeout: Option<Duration>,
     pub headers: serde_json::Map<String, Value>,
+    pub oauth_config: Option<OAuthConfig>,
 }
 
 fn default_tool_call_timeout_seconds() -> u64 {

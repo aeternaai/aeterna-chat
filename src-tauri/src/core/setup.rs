@@ -184,7 +184,7 @@ pub fn migrate_mcp_servers(
     if mcp_version < 2 {
         log::info!("Migrating MCP schema version 2: Adding Jan Browser MCP");
         let result = add_server_config(
-            app_handle,
+            app_handle.clone(),
             "Jan Browser MCP".to_string(),
             serde_json::json!({
                 "command": "npx",
@@ -201,7 +201,31 @@ pub fn migrate_mcp_servers(
             log::error!("Failed to add Jan Browser MCP server config: {e}");
         }
     }
-    store.set("mcp_version", 2);
+    if mcp_version < 3 {
+        log::info!("Migrating MCP schema version 3: Adding JIRA Rovo MCP");
+        let result = add_server_config(
+            app_handle,
+            "jira-rovo".to_string(),
+            serde_json::json!({
+                "command": "npx",
+                "args": ["-y", "mcp-remote", "https://mcp.atlassian.com/v1/sse", "--transport", "sse-only"],
+                "env": {},
+                "active": false,
+                "official": true,
+                "oauth": {
+                    "authUrl": "https://auth.atlassian.com/authorize",
+                    "tokenUrl": "https://auth.atlassian.com/oauth/token",
+                    "clientId": "YOUR_ATLASSIAN_CLIENT_ID",
+                    "scopes": ["read:jira-work", "read:confluence-space.summary", "read:confluence-content.all"],
+                    "redirectUri": "http://localhost:17390/oauth/callback"
+                }
+            }),
+        );
+        if let Err(e) = result {
+            log::error!("Failed to add JIRA Rovo MCP server config: {e}");
+        }
+    }
+    store.set("mcp_version", 3);
     store.save().expect("Failed to save store");
     Ok(())
 }

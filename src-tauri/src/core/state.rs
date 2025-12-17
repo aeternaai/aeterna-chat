@@ -1,6 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::core::{downloads::models::DownloadManagerState, mcp::models::McpSettings, router::models::RouterConfig};
+use crate::core::{
+    downloads::models::DownloadManagerState,
+    mcp::models::{McpSettings, OAuthToken},
+    mcp::oauth::PendingOAuthFlow,
+    router::models::RouterConfig,
+};
 use rmcp::{
     model::{CallToolRequestParam, CallToolResult, InitializeRequestParam, Tool},
     service::RunningService,
@@ -30,6 +35,11 @@ pub struct AppState {
     pub server_handle: Arc<Mutex<Option<ServerHandle>>>,
     pub tool_call_cancellations: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
     pub mcp_settings: Arc<Mutex<McpSettings>>,
+    // OAuth state for MCP servers
+    pub mcp_oauth_tokens: Arc<Mutex<HashMap<String, OAuthToken>>>,
+    pub mcp_oauth_pending: Arc<Mutex<HashMap<String, PendingOAuthFlow>>>,
+    pub mcp_oauth_server: Arc<Mutex<Option<JoinHandle<()>>>>,
+    pub mcp_oauth_url_opened: Arc<Mutex<HashMap<String, bool>>>, // Track if OAuth URL already opened for a server
     // Router service state
     pub router_process: Arc<Mutex<Option<Child>>>,
     pub router_config: Arc<Mutex<RouterConfig>>,

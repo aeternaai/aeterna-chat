@@ -1,4 +1,5 @@
 use rmcp::model::{CallToolRequestParam, CallToolResult};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::sync::oneshot;
@@ -6,7 +7,7 @@ use tokio::time::timeout;
 
 use super::{
     constants::DEFAULT_MCP_CONFIG,
-    helpers::{restart_active_mcp_servers, start_mcp_server_with_restart, stop_mcp_servers},
+    helpers::{extract_command_args, restart_active_mcp_servers, start_mcp_server_with_restart, stop_mcp_servers},
 };
 use crate::core::{
     app::commands::get_jan_data_folder_path,
@@ -17,7 +18,14 @@ use crate::core::{
     mcp::models::ToolWithServer,
     state::{RunningServiceEnum, SharedMcpServers},
 };
-use std::{fs, time::Duration};
+use std::{collections::HashMap, fs, time::Duration};
+
+/// OAuth flow result containing the authorization URL
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthFlowResult {
+    pub auth_url: String,
+}
 
 async fn tool_call_timeout(state: &State<'_, AppState>) -> Duration {
     state
@@ -82,6 +90,13 @@ pub async fn deactivate_mcp_server<R: Runtime>(
         let mut counts = state.mcp_restart_counts.lock().await;
         counts.remove(&name);
         log::info!("Reset restart count for MCP server {name}");
+    }
+
+    // Reset OAuth URL opened flag
+    {
+        let mut opened = state.mcp_oauth_url_opened.lock().await;
+        opened.remove(&name);
+        log::info!("Reset OAuth URL opened flag for MCP server {name}");
     }
 
     // Now remove and stop the server
@@ -488,3 +503,206 @@ pub async fn save_mcp_configs<R: Runtime>(app: AppHandle<R>, configs: String) ->
 
     Ok(())
 }
+
+// ============================================================================
+// OAuth Commands for MCP Servers
+// ============================================================================
+
+use super::{
+    models::{OAuthConfig, OAuthStatus},
+    oauth::{save_oauth_tokens, start_oauth_flow},
+};
+
+/// Start OAuth authentication flow for an MCP server
+#[tauri::command]
+pub async fn start_mcp_oauth_flow<R: Runtime>(
+    app: AppHandle<R>,
+    server_name: String,
+    oauth_config: OAuthConfig,
+) -> Result<OAuthFlowResult, String> {
+    log::info!("Starting OAuth flow for MCP server: {}", server_name);
+    let auth_url = start_oauth_flow(app, server_name, oauth_config).await?;
+    Ok(OAuthFlowResult { auth_url })
+}
+
+/// Get OAuth authentication status for an MCP server
+#[tauri::command]
+pub async fn get_mcp_oauth_status<R: Runtime>(
+    app: AppHandle<R>,
+    server_name: String,
+) -> Result<OAuthStatus, String> {
+    let state = app.state::<AppState>();
+    let tokens = state.mcp_oauth_tokens.lock().await;
+
+    match tokens.get(&server_name) {
+        Some(token) => Ok(OAuthStatus {
+            server_name,
+            authenticated: !token.is_expired(),
+            expires_at: Some(token.expires_at),
+            scopes: token.scopes.clone(),
+        }),
+        None => Ok(OAuthStatus {
+            server_name,
+            authenticated: false,
+            expires_at: None,
+            scopes: vec![],
+        }),
+    }
+}
+
+/// Revoke OAuth token for an MCP server
+#[tauri::command]
+pub async fn revoke_mcp_oauth_token<R: Runtime>(
+    app: AppHandle<R>,
+    server_name: String,
+) -> Result<(), String> {
+    log::info!("Revoking OAuth token for MCP server: {}", server_name);
+
+    let state = app.state::<AppState>();
+    {
+        let mut tokens = state.mcp_oauth_tokens.lock().await;
+        tokens.remove(&server_name);
+        save_oauth_tokens(&app, &tokens).await?;
+    }
+
+    // Emit event to frontend
+    app.emit(
+        "mcp_oauth_revoked",
+        serde_json::json!({
+            "server": server_name
+        }),
+    )
+    .map_err(|e| format!("Failed to emit OAuth revoked event: {e}"))?;
+
+    Ok(())
+}
+
+/// Get all OAuth statuses for MCP servers
+#[tauri::command]
+pub async fn get_all_mcp_oauth_statuses<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<HashMap<String, OAuthStatus>, String> {
+    log::info!("[OAuth Debug] get_all_mcp_oauth_statuses called");
+    let state = app.state::<AppState>();
+    let tokens = state.mcp_oauth_tokens.lock().await;
+
+    let mut statuses: HashMap<String, OAuthStatus> = tokens
+        .iter()
+        .map(|(server_name, token)| {
+            log::info!("[OAuth Debug] Token store - server: {}, authenticated: {}", server_name, !token.is_expired());
+            (
+                server_name.clone(),
+                OAuthStatus {
+                    server_name: server_name.clone(),
+                    authenticated: !token.is_expired(),
+                    expires_at: Some(token.expires_at),
+                    scopes: token.scopes.clone(),
+                }
+            )
+        })
+        .collect();
+    
+    drop(tokens);
+    log::info!("[OAuth Debug] OAuth token store has {} entries", statuses.len());
+
+    // Check for mcp-remote servers that store auth in ~/.mcp-auth
+    let active_servers = state.mcp_active_servers.lock().await;
+    log::info!("[OAuth Debug] Active servers count: {}", active_servers.len());
+    
+    // Check if ~/.mcp-auth exists and has content
+    let mcp_remote_authenticated = if let Some(home_dir) = dirs::home_dir() {
+        let mcp_auth_path = home_dir.join(".mcp-auth");
+        log::info!("[OAuth Debug] Checking mcp-auth path: {:?}", mcp_auth_path);
+        if mcp_auth_path.exists() {
+            log::info!("[OAuth Debug] mcp-auth directory exists");
+            if let Ok(entries) = std::fs::read_dir(&mcp_auth_path) {
+                let has_files = entries.filter_map(|e| e.ok()).any(|_| true);
+                log::info!("[OAuth Debug] mcp-auth has files: {}", has_files);
+                has_files
+            } else {
+                log::warn!("[OAuth Debug] Could not read mcp-auth directory");
+                false
+            }
+        } else {
+            log::info!("[OAuth Debug] mcp-auth directory does not exist");
+            false
+        }
+    } else {
+        log::warn!("[OAuth Debug] Could not get home directory");
+        false
+    };
+    
+    // Check all active servers and override token store for mcp-remote servers
+    for (server_name, config) in active_servers.iter() {
+        log::info!("[OAuth Debug] Checking server: {}", server_name);
+        
+        // Check if this server uses mcp-remote
+        if let Some(config_params) = extract_command_args(config) {
+            let uses_mcp_remote = config_params.args.iter().any(|arg| {
+                arg.as_str().map(|s| s.contains("mcp-remote")).unwrap_or(false)
+            });
+            
+            log::info!("[OAuth Debug] Server {} uses mcp-remote: {}", server_name, uses_mcp_remote);
+            
+            if uses_mcp_remote {
+                // For mcp-remote servers, always use ~/.mcp-auth check (override token store)
+                log::info!("[OAuth Debug] Overriding token store status for mcp-remote server: {}", server_name);
+                statuses.insert(
+                    server_name.clone(),
+                    OAuthStatus {
+                        server_name: server_name.clone(),
+                        authenticated: mcp_remote_authenticated,
+                        expires_at: None,
+                        scopes: Vec::new(),
+                    }
+                );
+                log::info!("[OAuth Debug] Set mcp-remote server {} authenticated={}", server_name, mcp_remote_authenticated);
+            }
+        } else {
+            log::info!("[OAuth Debug] Could not extract command args for server: {}", server_name);
+        }
+    }
+
+    log::info!("[OAuth Debug] Returning {} OAuth statuses", statuses.len());
+    for (name, status) in statuses.iter() {
+        log::info!("[OAuth Debug] Status - {}: authenticated={}", name, status.authenticated);
+    }
+
+    Ok(statuses)
+}
+
+/// Clear MCP remote auth folder (~/.mcp-auth)
+/// This is useful for MCP servers that use mcp-remote for OAuth
+#[tauri::command]
+pub async fn clear_mcp_remote_auth<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+    let home_dir = dirs::home_dir()
+        .ok_or_else(|| "Failed to get home directory".to_string())?;
+    
+    let mcp_auth_path = home_dir.join(".mcp-auth");
+    
+    if !mcp_auth_path.exists() {
+        log::info!("MCP auth folder does not exist: {:?}", mcp_auth_path);
+        return Ok(());
+    }
+    
+    log::info!("Clearing MCP remote auth folder: {:?}", mcp_auth_path);
+    
+    // Remove all contents of the directory
+    fs::remove_dir_all(&mcp_auth_path)
+        .map_err(|e| format!("Failed to remove MCP auth folder: {}", e))?;
+    
+    // Recreate the empty directory
+    fs::create_dir(&mcp_auth_path)
+        .map_err(|e| format!("Failed to recreate MCP auth folder: {}", e))?;
+    
+    // Reset all OAuth URL opened flags so servers can prompt again
+    let state = app.state::<AppState>();
+    {
+        let mut opened = state.mcp_oauth_url_opened.lock().await;
+        opened.clear();
+    }
+    
+    log::info!("Successfully cleared MCP remote auth folder and reset OAuth flags");
+    Ok(())
+}
+

@@ -8,6 +8,10 @@ import {
   IconPlus,
   IconTrash,
   IconCodeCircle,
+  IconKey,
+  IconKeyOff,
+  IconDatabaseOff,
+  IconRefresh,
 } from '@tabler/icons-react'
 import {
   useMCPServers,
@@ -15,6 +19,7 @@ import {
   MCPSettings,
   DEFAULT_MCP_SETTINGS,
 } from '@/hooks/useMCPServers'
+import { useMCPOAuth } from '@/hooks/useMCPOAuth'
 import { useEffect, useState } from 'react'
 import AddEditMCPServer from '@/containers/dialogs/AddEditMCPServer'
 import DeleteMCPServerConfirm from '@/containers/dialogs/DeleteMCPServerConfirm'
@@ -31,6 +36,11 @@ import { PlatformGuard } from '@/lib/platform/PlatformGuard'
 import { PlatformFeature } from '@/lib/platform'
 import { listen } from '@tauri-apps/api/event'
 import { SystemEvent } from '@/types/events'
+
+// Function to check if a server uses mcp-remote
+const usesMcpRemote = (config: MCPServerConfig) => {
+  return config.args?.some(arg => arg.includes('mcp-remote')) ?? false
+}
 
 // Function to mask sensitive values
 const maskSensitiveValue = (value: string) => {
@@ -122,6 +132,26 @@ function MCPServersDesktop() {
   } = useMCPServers()
   const { allowAllMCPPermissions, setAllowAllMCPPermissions } =
     useToolApproval()
+  const {
+    startOAuthFlow,
+    revokeOAuthToken,
+    clearMcpRemoteAuth,
+    isAuthenticated,
+    isLoading: oauthLoading,
+  } = useMCPOAuth()
+
+  // Debug: Log MCP servers to see if oauth field is loaded
+  useEffect(() => {
+    console.log('[DEBUG OAuth UI] All MCP Servers:', mcpServers)
+    Object.entries(mcpServers).forEach(([key, config]) => {
+      console.log(`[DEBUG OAuth UI] Server "${key}":`, {
+        hasOAuth: !!config.oauth,
+        oauthConfig: config.oauth,
+        active: config.active,
+        isAuthenticated: isAuthenticated(key),
+      })
+    })
+  }, [mcpServers, isAuthenticated])
 
   const [open, setOpen] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
@@ -512,6 +542,35 @@ function MCPServersDesktop() {
                             <span>Official</span>
                           </div>
                         )}
+                        {config.oauth && (() => {
+                          const authenticated = isAuthenticated(key)
+                          console.log(`[DEBUG OAuth UI Badge] Rendering badge for "${key}":`, {
+                            hasOAuth: !!config.oauth,
+                            authenticated,
+                          })
+                          return (
+                            <div
+                              className={twMerge(
+                                'flex items-center gap-1.5 px-2 py-0.5 text-xs rounded',
+                                authenticated
+                                  ? 'bg-green-500/10 text-green-500'
+                                  : 'bg-amber-500/10 text-amber-500'
+                              )}
+                            >
+                              {authenticated ? (
+                                <>
+                                  <IconKey size={12} />
+                                  <span>Authenticated</span>
+                                </>
+                              ) : (
+                                <>
+                                  <IconKeyOff size={12} />
+                                  <span>Auth Required</span>
+                                </>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </div>
                     }
                     descriptionOutside={
@@ -587,6 +646,70 @@ function MCPServersDesktop() {
                     }
                     actions={
                       <div className="flex items-center gap-0.5">
+                        {/* OAuth authentication button */}
+                        {config.oauth && (
+                          <>
+                            {isAuthenticated(key) ? (
+                              <>
+                                {usesMcpRemote(config) ? (
+                                  // For mcp-remote servers, show refresh icon when authenticated
+                                  <div
+                                    className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out"
+                                    onClick={() => !oauthLoading && config.oauth && startOAuthFlow(key, config.oauth)}
+                                    title="Click to refresh credentials"
+                                  >
+                                    <IconRefresh
+                                      size={18}
+                                      className="text-green-500"
+                                    />
+                                  </div>
+                                ) : (
+                                  // For other OAuth servers, show revoke button
+                                  <div
+                                    className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out"
+                                    onClick={() => revokeOAuthToken(key)}
+                                    title={t('mcp-servers:oauth.revoke')}
+                                  >
+                                    <IconKeyOff
+                                      size={18}
+                                      className="text-red-500"
+                                    />
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div
+                                className={twMerge(
+                                  'size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out',
+                                  oauthLoading && 'opacity-50 cursor-not-allowed'
+                                )}
+                                onClick={() => !oauthLoading && config.oauth && startOAuthFlow(key, config.oauth)}
+                                title={t('mcp-servers:oauth.authenticate')}
+                              >
+                                <IconKey
+                                  size={18}
+                                  className="text-blue-500"
+                                />
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {/* Clear mcp-remote auth button - only show for servers using mcp-remote */}
+                        {usesMcpRemote(config) && (
+                          <div
+                            className={twMerge(
+                              'size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out',
+                              oauthLoading && 'opacity-50 cursor-not-allowed'
+                            )}
+                            onClick={() => !oauthLoading && clearMcpRemoteAuth()}
+                            title="Clear mcp-remote authentication credentials"
+                          >
+                            <IconDatabaseOff
+                              size={18}
+                              className="text-orange-500"
+                            />
+                          </div>
+                        )}
                         <div
                           className="size-6 cursor-pointer flex items-center justify-center rounded hover:bg-main-view-fg/10 transition-all duration-200 ease-in-out"
                           onClick={() => handleOpenJsonEditor(key)}

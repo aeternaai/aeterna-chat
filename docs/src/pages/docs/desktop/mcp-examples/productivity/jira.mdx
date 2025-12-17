@@ -1,0 +1,482 @@
+---
+title: JIRA MCP
+description: Manage software projects and issue tracking through natural language with JIRA integration.
+keywords:
+  [
+    Jan,
+    MCP,
+    Model Context Protocol,
+    JIRA,
+    Atlassian,
+    project management,
+    issue tracking,
+    agile,
+    scrum,
+    kanban,
+    software development,
+    tool calling,
+  ]
+---
+
+import { Callout, Steps } from 'nextra/components'
+
+# JIRA MCP
+
+[JIRA MCP](https://github.com/janhq/jira-mcp-server) provides comprehensive project management capabilities for JIRA through natural conversation. Transform your software development workflow by managing issues, projects, sprints, and team collaboration directly through AI.
+
+<Callout type="info">
+This integration supports JIRA Cloud, Data Center, and Server. The setup examples below use JIRA Cloud with API Token authentication.
+</Callout>
+
+## Available Tools
+
+JIRA MCP offers extensive project management capabilities across multiple categories:
+
+### Issue Management (12 tools)
+- `jira_create_issue`: Create new issues with all standard fields
+- `jira_get_issue`: View complete issue details
+- `jira_update_issue`: Modify existing issues
+- `jira_delete_issue`: Remove issues with confirmation
+- `jira_search_issues`: JQL-based powerful search
+- `jira_assign_issue`: Assign issues to team members
+- `jira_transition_issue`: Move issues through workflow
+- `jira_link_issues`: Create issue relationships
+- `jira_add_comment`: Add comments to issues
+- `jira_get_comments`: View issue comments
+- `jira_add_attachment`: Upload files to issues
+- `jira_get_attachments`: List and download attachments
+
+### Project & Workflow (8 tools)
+- `jira_list_projects`: View all accessible projects
+- `jira_get_project`: Get project details
+- `jira_list_issue_types`: View available issue types
+- `jira_list_priorities`: See priority levels
+- `jira_list_statuses`: View workflow statuses
+- `jira_get_transitions`: See available state transitions
+- `jira_list_components`: Browse project components
+- `jira_list_versions`: Track releases and versions
+
+### Team & Collaboration (3 tools)
+- `jira_list_users`: View project team members
+- `jira_get_user`: Get user details
+- `jira_search_users`: Find team members
+
+### Sprint & Agile (7 tools)
+- `jira_list_boards`: View Scrum/Kanban boards
+- `jira_get_board`: Get board configuration
+- `jira_list_sprints`: See all sprints
+- `jira_get_sprint`: View sprint details
+- `jira_move_to_sprint`: Add issues to sprint
+- `jira_start_sprint`: Start a sprint
+- `jira_complete_sprint`: Complete a sprint
+
+### Advanced Features (6 tools)
+- `jira_create_filter`: Save JQL search filters
+- `jira_get_filter`: Retrieve saved filters
+- `jira_bulk_update_issues`: Update multiple issues at once
+- `jira_get_changelog`: View issue history
+- `jira_watch_issue`: Subscribe to notifications
+- `jira_vote_issue`: Vote for features
+
+## Prerequisites
+
+- Jan with experimental features enabled
+- JIRA account (Cloud, Data Center, or Server)
+- API Token (Cloud) or Personal Access Token (Data Center/Server)
+- Model with strong tool calling support
+- Active internet connection
+
+<Callout type="info">
+JIRA Cloud offers a free tier for up to 10 users with unlimited projects and issues. Perfect for small teams and personal projects!
+</Callout>
+
+## Setup
+
+### Create JIRA Account
+
+1. Sign up at [atlassian.com](https://www.atlassian.com/software/jira) or log in if you have an account
+2. Complete the onboarding process and create your first project
+
+![JIRA signup page](../../_assets/jira-signup.png)
+
+Once set up, you'll see your main dashboard:
+
+![JIRA main dashboard](../../_assets/jira-dashboard.png)
+
+### Generate API Token
+
+For JIRA Cloud:
+
+1. Go to [API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
+2. Click **Create API token**
+3. Give it a label (e.g., "Jan AI Assistant")
+4. Copy the token - you won't see it again!
+
+![JIRA API token generation](../../_assets/jira-api-token.png)
+
+For JIRA Data Center/Server, use Personal Access Tokens instead - check your instance's documentation.
+
+### Enable MCP in Jan
+
+<Callout type="warning">
+If you don't see the MCP Servers option, enable **Experimental Features** in **Settings > General** first.
+</Callout>
+
+1. Go to **Settings > MCP Servers**
+2. Toggle **Allow All MCP Tool Permission** ON
+
+### Configure JIRA MCP
+
+Click the `+` button to add a new MCP server:
+
+**Configuration:**
+- **Server Name**: `jira`
+- **Command**: `npx`
+- **Arguments**: `-y @janhq/jira-mcp-server`
+- **Environment Variables**: 
+  - Key: `JIRA_URL`, Value: `https://your-domain.atlassian.net`
+  - Key: `JIRA_EMAIL`, Value: `your-email@example.com`
+  - Key: `JIRA_API_TOKEN`, Value: `your_api_token_here`
+  - Key: `JIRA_DEFAULT_PROJECT` (optional), Value: `PROJ`
+
+![JIRA MCP configuration in Jan](../../_assets/jira-config.png)
+
+<Callout type="tip">
+The `JIRA_DEFAULT_PROJECT` is optional but useful for quick issue creation without specifying the project every time.
+</Callout>
+
+## Usage
+
+### Select a Model with Tool Calling
+
+Open a new chat and select a model that excels at tool calling. Recommended models:
+
+- **Cloud**: Claude 3.5/4 Sonnet, Claude 4 Opus, GPT-4o, Gemini 1.5/2.0 Pro
+- **Local**: Command R+, Qwen 2.5, Llama 3.3 (with tools enabled)
+
+Make sure tools are enabled for your chosen model in **Model Parameters**.
+
+![Model selection with tools enabled](../../_assets/model-tools-enabled.png)
+
+### Verify Tools Available
+
+You should see all JIRA tools in the tools panel:
+
+![JIRA tools available in chat](../../_assets/jira-tools-panel.png)
+
+### Start Managing Your Projects
+
+Now you can manage JIRA through natural conversation!
+
+## Example Workflows
+
+### 🐛 Bug Triage & Assignment
+
+```
+Look at all high-priority bugs in the MOBILE project. 
+For each one, check if it has an assignee. If not, 
+assign it to the team member with the least open bugs.
+Add a comment summarizing the triage decision.
+```
+
+### 📋 Sprint Planning
+
+```
+We're planning Sprint 23 for the WEB project. 
+List all unassigned stories with priority High or above.
+Create a new sprint called "Sprint 23 - Q1 Features" and 
+add the top 15 stories by priority. Show me the sprint summary.
+```
+
+### 🔍 Advanced JQL Search
+
+```
+Find all issues in BACKEND project that:
+- Are assigned to me
+- Were created in the last 2 weeks
+- Have status "In Progress" or "Code Review"
+- Have priority Medium or higher
+Show them grouped by priority.
+```
+
+### 🚀 Release Management
+
+```
+For the API project version 2.0:
+1. List all issues linked to this version
+2. Show how many are Done vs In Progress
+3. Create a status report
+4. If all issues are Done, mark the version as Released
+```
+
+### 📊 Team Dashboard
+
+```
+Generate a team status report for the PLATFORM project:
+- List all team members
+- Show their current workload (# of open issues)
+- Highlight anyone with >10 open issues
+- List any blocked issues
+```
+
+### 🎯 Epic Tracking
+
+```
+Show me all epics in the MOBILE project.
+For the "User Authentication" epic:
+- List all linked issues
+- Calculate completion percentage
+- Identify any blockers
+- Suggest which stories to prioritize next
+```
+
+## Creative Use Cases
+
+### 🎮 Gamified Sprint Reviews
+
+```
+Review our completed sprint as if you're a sports commentator calling a championship game. 
+For each completed story, give it a dramatic play-by-play announcement with stats 
+(story points, time to completion, team members involved). Crown an MVP based on 
+highest-priority stories completed. Make it epic!
+```
+
+### 📜 Medieval Quest Log
+
+```
+Transform our backlog into a medieval fantasy quest log. Each epic is a kingdom campaign,
+stories are noble quests, bugs are dragon encounters, and technical debt is dark magic 
+to dispel. Create issues with dramatic quest descriptions, assign heroes (developers) to 
+quests based on their skills, and track our progress toward glory!
+```
+
+### 🚀 NASA Mission Control
+
+```
+Manage our product launch like a NASA space mission. The release is T-minus countdown,
+critical bugs are system failures requiring immediate attention, features are mission 
+objectives, and sprints are orbit phases. Create a mission status report with 
+go/no-go criteria for launch, assign crew (team) to stations (components), and 
+track readiness levels.
+```
+
+### 🏴‍☠️ Pirate Ship Logbook
+
+```
+Run our project like a pirate ship expedition. The product manager is the captain,
+sprints are voyages, features are islands to conquer, bugs are sea monsters,
+and releases are treasure hauls. Write issue descriptions in pirate speak,
+assign swashbuckling tasks to the crew, and track our plunder (completed work)
+with dramatic flair and treasure maps.
+```
+
+### 🎬 Movie Production Studio
+
+```
+Manage our app development like a Hollywood movie production. The product is the film,
+epics are acts, features are scenes, developers are the crew, and sprints are shooting 
+schedules. Create issues as if they're script notes, assign roles (front-of-camera 
+vs behind-the-scenes), track production milestones, and generate weekly production reports 
+worthy of Variety magazine.
+```
+
+## Practical Workflows
+
+### Daily Standup Prep
+
+```
+Prepare my daily standup report:
+- What I completed yesterday
+- What I'm working on today
+- Any blockers or issues needing help
+Format it in a clear, concise way for the team.
+```
+
+### Code Review Tracking
+
+```
+Find all issues with status "Code Review" assigned to me.
+For each one, check how long it's been in review.
+If any have been waiting >3 days, add a comment 
+pinging the reviewer and bump the priority.
+```
+
+### Automated Triage
+
+```
+Look at all new bugs from the last 24 hours.
+For each one:
+1. Check if it has a clear reproduction steps
+2. Assign appropriate severity based on description
+3. Add labels based on affected component
+4. If critical, notify me with a summary
+```
+
+### Sprint Burndown Analysis
+
+```
+Analyze our current sprint progress:
+- Total story points planned vs completed
+- Remaining days in sprint
+- Current velocity
+- Predict if we'll complete on time
+- Suggest stories to defer if needed
+```
+
+### Technical Debt Management
+
+```
+Create a technical debt dashboard:
+- List all issues labeled "tech-debt"
+- Group by component/area
+- Calculate total estimated effort
+- Suggest which ones to tackle in next sprint
+  based on impact and dependencies
+```
+
+## Advanced Integration Patterns
+
+### Cross-Project Dependencies
+
+```
+We're planning a feature that touches three projects: MOBILE, API, and WEB.
+Create coordinated issues in all three projects, link them appropriately,
+and set up a parent epic to track the entire initiative. Make sure dependencies
+are clear and sprint schedules align.
+```
+
+### Automated Sprint Ceremonies
+
+```
+It's the end of Sprint 22. Help me:
+1. Complete the sprint
+2. Move incomplete items to next sprint
+3. Generate a retrospective report
+4. Create Sprint 23 with recommended capacity
+5. Send summary to the team (create as comment on sprint epic)
+```
+
+### Smart Notifications
+
+```
+Set up watches for me on:
+- All P0/P1 bugs in BACKEND
+- Any issue blocked by my work
+- Issues in "Ready for QA" assigned to my team
+- Epics marked as "At Risk"
+```
+
+### Release Notes Generation
+
+```
+Generate release notes for version 3.0:
+- Group completed issues by type (Features, Improvements, Bug Fixes)
+- Use customer-friendly language
+- Highlight breaking changes
+- Include upgrade instructions from linked docs
+- Format for our changelog
+```
+
+## Tips for Maximum Productivity
+
+- **Use JQL for Power**: Learn basic JQL syntax for complex queries
+- **Batch Operations**: Create/update multiple issues in one request  
+- **Templates**: Ask AI to remember your common issue templates
+- **Natural Language**: You don't need perfect syntax - chat naturally
+- **Combine with Other MCPs**: 
+  - Serper: Research technical solutions → create implementation tickets
+  - Filesystem: Analyze code → create refactoring issues
+  - GitHub (future): Link commits/PRs to JIRA issues automatically
+
+## Troubleshooting
+
+**Authentication Issues:**
+- Verify JIRA URL format: `https://domain.atlassian.net` (no trailing slash)
+- Check API token is copied correctly (no extra spaces)
+- Ensure email matches your JIRA account
+- For on-premise: Use Personal Access Token instead
+
+**Connection Errors:**
+- Check internet connectivity
+- Verify JIRA instance is accessible
+- Test credentials in browser first
+- Check corporate firewall/VPN settings
+
+**Tool Calling Errors:**
+- Ensure model supports tool calling
+- Enable tools in model parameters
+- Try a different model (Claude/GPT-4o recommended)
+- Check Jan logs for detailed error messages
+
+**Permission Errors:**
+- Verify JIRA account has required permissions
+- Check project-level permissions
+- For admin operations, ensure admin role
+- Review Atlassian permission scheme
+
+**Rate Limiting:**
+- JIRA Cloud: 10 requests/second per user
+- Space out bulk operations
+- Use batch APIs when available
+- Consider upgrading JIRA tier if hitting limits often
+
+**Data Not Appearing:**
+- Refresh JIRA web interface to confirm
+- Check project/issue exists and you have access
+- Verify filters aren't hiding results
+- Try basic operation first to test connectivity
+
+<Callout type="tip">
+JIRA MCP respects your instance permissions. If you can't do something in JIRA's web UI, you can't do it through the MCP either!
+</Callout>
+
+## Performance Optimization
+
+For large JIRA instances with thousands of issues:
+
+- **Use Filters**: Save JQL filters for common queries
+- **Limit Fields**: Request only needed fields in searches
+- **Pagination**: Process large result sets in batches
+- **Cache**: Let AI remember frequently accessed data in conversation
+- **Specific Queries**: Use precise JQL instead of broad searches
+
+## Privacy & Security
+
+JIRA MCP uses your API token for authentication:
+- Credentials stored locally in Jan's config
+- Never sent to third parties
+- Token has same permissions as your account
+- Revoke tokens anytime from Atlassian settings
+- All communication over HTTPS
+
+<Callout type="warning">
+API tokens are powerful - they grant full access to your JIRA account. Keep them secure and don't share them!
+</Callout>
+
+## Integration Ideas
+
+Combine JIRA with other MCP servers for powerful workflows:
+
+- **Linear + JIRA**: Sync issues between platforms, migrate projects
+- **GitHub + JIRA**: Link commits to issues, auto-update status
+- **Slack + JIRA**: Get notifications, create issues from messages  
+- **Todoist + JIRA**: Personal task management alongside team work
+- **Serper + JIRA**: Research solutions, create implementation tickets
+- **E2B + JIRA**: Run code analysis, file bugs automatically
+
+## Next Steps
+
+JIRA MCP transforms project management from clicking through interfaces into natural conversation. Whether you're triaging bugs, planning sprints, or crafting epic development sagas, AI becomes your project management companion.
+
+Start with simple issue creation, then explore complex workflows like automated sprint planning, cross-project coordination, and intelligent triage. The combination of JIRA's powerful platform with AI's creative capabilities makes project management both efficient and entertaining!
+
+## Additional Resources
+
+- [JIRA REST API Documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v3/)
+- [JQL Syntax Guide](https://support.atlassian.com/jira-service-management-cloud/docs/use-advanced-search-with-jira-query-language-jql/)
+- [JIRA MCP GitHub Repository](https://github.com/janhq/jira-mcp-server)
+- [Jan MCP Documentation](https://jan.ai/docs/desktop/mcp)
+
+---
+
+**Need Help?** Join the [Jan Discord](https://discord.gg/jan) community for support and to share your JIRA workflows!
