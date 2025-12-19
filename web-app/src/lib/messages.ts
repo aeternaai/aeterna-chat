@@ -21,22 +21,24 @@ export type ToolResult = {
 
 // Helper function to convert the tool's output part into an API content part
 // Set to true to include images in tool responses (requires multimodal model support)
-const INCLUDE_IMAGES_IN_TOOL_RESPONSES = false
+const INCLUDE_IMAGES_IN_TOOL_RESPONSES = true
 
-const convertToolPartToApiContentPart = (part: ToolResult['content'][0]) => {
+const convertToolPartToApiContentPart = (part: ToolResult['content'][0], modelSupportsVision: boolean) => {
   if (part.text) {
     return { type: 'text', text: part.text }
   }
 
   // Handle base64 image data
   if (part.data) {
-    // Check if images should be included
-    if (!INCLUDE_IMAGES_IN_TOOL_RESPONSES) {
+    // Check if images should be included based on model capability
+    if (!INCLUDE_IMAGES_IN_TOOL_RESPONSES || !modelSupportsVision) {
       // Convert image to text description instead of sending raw image data
       const mimeType = part.type === 'image' ? 'image/png' : part.type || 'image/png'
+      const sizeKB = Math.round(part.data.length / 1024)
+      console.log(`[Vision] Image omitted: ${mimeType}, ${sizeKB}KB - model does not support vision (modelSupportsVision=${modelSupportsVision})`)
       return { 
         type: 'text', 
-        text: `[Image content (${mimeType}) - ${Math.round(part.data.length / 1024)}KB - omitted for non-multimodal model]` 
+        text: `[Image content (${mimeType}) - ${sizeKB}KB - omitted for non-multimodal model]` 
       }
     }
 
@@ -56,7 +58,8 @@ const convertToolPartToApiContentPart = (part: ToolResult['content'][0]) => {
 
   // Handle pre-formatted image URL
   if (part.image_url) {
-    if (!INCLUDE_IMAGES_IN_TOOL_RESPONSES) {
+    if (!INCLUDE_IMAGES_IN_TOOL_RESPONSES || !modelSupportsVision) {
+      console.log(`[Vision] Image URL omitted: ${part.image_url.url.substring(0, 100)}... - model does not support vision (modelSupportsVision=${modelSupportsVision})`)
       return { 
         type: 'text', 
         text: `[Image URL: ${part.image_url.url.substring(0, 100)}... - omitted for non-multimodal model]` 
@@ -77,8 +80,10 @@ export class CompletionMessagesBuilder {
   private messages: ChatCompletionMessageParam[] = []
   // Track ephemeral tool call IDs so we can replace them
   private ephemeralToolCallIds: Set<string> = new Set()
+  private modelSupportsVision: boolean = false
 
-  constructor(messages: ThreadMessage[], systemInstruction?: string) {
+  constructor(messages: ThreadMessage[], systemInstruction?: string, modelSupportsVision: boolean = false) {
+    this.modelSupportsVision = modelSupportsVision
     if (systemInstruction) {
       this.messages.push({
         role: 'system',
@@ -228,7 +233,7 @@ export class CompletionMessagesBuilder {
 
       if (hasMultimodalContent) {
         // Build the structured content array
-        content = result.content.map(convertToolPartToApiContentPart)
+        content = result.content.map((part) => convertToolPartToApiContentPart(part, this.modelSupportsVision))
       } else if (result.content?.[0]?.text) {
         // Standard text case
         content = result.content[0].text

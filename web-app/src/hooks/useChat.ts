@@ -6,7 +6,8 @@ import { useThreads } from './useThreads'
 import { useAppState, type PromptProgress } from './useAppState'
 import { useMessages } from './useMessages'
 import { useRouter } from '@tanstack/react-router'
-import { defaultModel } from '@/lib/models'
+import { defaultModel, getModelCapabilities } from '@/lib/models'
+import { ModelCapabilities } from '@/types/models'
 import { route } from '@/constants/routes'
 import {
   emptyThreadContent,
@@ -990,11 +991,18 @@ export const useChat = () => {
           ? messages.filter((m) => m.id !== continueFromMessageId)
           : messages
 
+        // Check if the selected model supports vision/multimodal
+        const modelCapabilities = selectedModel && targetProvider
+          ? getModelCapabilities(targetProvider, selectedModel.id)
+          : []
+        const modelSupportsVision = modelCapabilities.includes(ModelCapabilities.VISION)
+
         const builder = new CompletionMessagesBuilder(
           contextMessages,
           currentAssistant
             ? renderInstructions(currentAssistant.instructions)
-            : undefined
+            : undefined,
+          modelSupportsVision
         )
         // Using addUserMessage to respect legacy code. Should be using the userContent above.
         if (troubleshooting && !continueFromMessageId) {
