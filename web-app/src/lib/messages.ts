@@ -75,6 +75,8 @@ const convertToolPartToApiContentPart = (part: ToolResult['content'][0]) => {
  */
 export class CompletionMessagesBuilder {
   private messages: ChatCompletionMessageParam[] = []
+  // Track ephemeral tool call IDs so we can replace them
+  private ephemeralToolCallIds: Set<string> = new Set()
 
   constructor(messages: ThreadMessage[], systemInstruction?: string) {
     if (systemInstruction) {
@@ -190,15 +192,28 @@ export class CompletionMessagesBuilder {
     console.warn('🚨 [EPHEMERAL CHECK] Result:', JSON.stringify(result, null, 2))
     
     // Check for ephemeral flag - check both 'meta' and '_meta' (Tauri serialization may add underscore)
-    if (typeof result !== 'string' && (
+    const isEphemeral = typeof result !== 'string' && (
       result.meta?.ephemeral === true || 
       (result as any)._meta?.ephemeral === true
-    )) {
-      console.warn('🚨 [EPHEMERAL] ✅ SKIPPED - Found ephemeral=true')
-      return
-    }
+    )
     
-    console.warn('🚨 [EPHEMERAL CHECK] NOT ephemeral, adding to history')
+    if (isEphemeral) {
+      console.warn('🚨 [EPHEMERAL] Found ephemeral=true - will replace previous ephemeral messages')
+      
+      // Remove all previous ephemeral tool messages to keep only the latest
+      this.messages = this.messages.filter(msg => {
+        if (msg.role === 'tool' && this.ephemeralToolCallIds.has((msg as any).tool_call_id)) {
+          console.warn('🚨 [EPHEMERAL] Removing previous ephemeral message:', (msg as any).tool_call_id)
+          return false
+        }
+        return true
+      })
+      
+      // Clear the set and add current ID
+      this.ephemeralToolCallIds.clear()
+      this.ephemeralToolCallIds.add(toolCallId)
+      console.warn('🚨 [EPHEMERAL] Adding new ephemeral message:', toolCallId)
+    }
     
     let content: string | any[] = ''
 
