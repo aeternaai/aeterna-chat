@@ -304,4 +304,14 @@ export class WebMCPService implements MCPService {
     console.log('revokeOAuthToken not available on web platform:', serverName)
     throw new Error('OAuth authentication is only available in the desktop version')
   }
+
+  async clearMcpRemoteAuth(): Promise<void> {
+    console.log('clearMcpRemoteAuth not available on web platform')
+    throw new Error('OAuth authentication is only available in the desktop version')
+  }
+
+  async fetchCachedToolOutput(refId: string, startToken: number, endToken: number): Promise<string> {
+    console.log('fetchCachedToolOutput not available on web platform:', { refId, startToken, endToken })
+    throw new Error('Cached tool output retrieval is only available in the desktop version')
+  }
 }

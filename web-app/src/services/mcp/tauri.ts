@@ -139,6 +139,14 @@ export class TauriMCPService extends DefaultMCPService {
   async clearMcpRemoteAuth(): Promise<void> {
     return await invoke('clear_mcp_remote_auth')
   }
+
+  async fetchCachedToolOutput(refId: string, startToken: number, endToken: number): Promise<string> {
+    return await invoke<string>('fetch_cached_tool_output', {
+      refId,
+      startToken,
+      endToken,
+    })
+  }
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

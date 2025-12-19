@@ -5,6 +5,11 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 
+// Maximum tokens to cache (1K shown initially + 20K available for retrieval)
+const MAX_CACHED_TOKENS: usize = 21_000;
+// Maximum tokens per fetch_cached_output call (forces exploration in chunks)
+const MAX_TOKENS_PER_FETCH: usize = 5_000;
+
 use super::{
     constants::DEFAULT_MCP_CONFIG,
     helpers::{extract_command_args, restart_active_mcp_servers, start_mcp_server_with_restart, stop_mcp_servers},
@@ -203,6 +208,39 @@ pub async fn get_tools(state: State<'_, AppState>) -> Result<Vec<ToolWithServer>
     let servers = state.mcp_servers.lock().await;
     let mut all_tools: Vec<ToolWithServer> = Vec::new();
 
+    // Add virtual internal tool for cache retrieval
+    all_tools.push(ToolWithServer {
+        name: "fetch_cached_output".to_string(),
+        description: Some(
+            "Retrieve cached tool output by reference ID. The cache stores the first 21,000 tokens of large outputs. \
+             CRITICAL RULES: \
+             1. ALWAYS provide explicit numeric end_token (do NOT use 'end' or omit it) \
+             2. Maximum 5,000 tokens per call (end_token - start_token ≤ 5000) \
+             3. Make multiple calls with 5K chunks: (0-5000), (5000-10000), (10000-15000), (15000-20000) \
+             4. If info not found in 21K tokens, state it was not found. \
+             EXAMPLE CORRECT USAGE: fetch_cached_output(ref_id='...', start_token=0, end_token=5000)".to_string()
+        ),
+        input_schema: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "ref_id": {
+                    "type": "string",
+                    "description": "The cache reference ID from the truncated output message"
+                },
+                "start_token": {
+                    "type": "number",
+                    "description": "Starting token index (REQUIRED, 0-based, range: 0-20999). Use 0 for first chunk."
+                },
+                "end_token": {
+                    "type": "number",
+                    "description": "Ending token index (REQUIRED, range: 1-21000). MUST be numeric (not 'end'). Range size MUST NOT exceed 5000: (end_token - start_token ≤ 5000). Use 5000 for first chunk."
+                }
+            },
+            "required": ["ref_id", "start_token", "end_token"]
+        }),
+        server: "_internal".to_string(),
+    });
+
     for (server_name, service) in servers.iter() {
         // List tools with timeout
         let tools_future = service.list_all_tools();
@@ -257,6 +295,191 @@ pub async fn call_tool(
     arguments: Option<Map<String, Value>>,
     cancellation_token: Option<String>,
 ) -> Result<CallToolResult, String> {
+    // Handle internal virtual tool for cache retrieval
+    if tool_name == "fetch_cached_output" {
+        log::info!("🔍 Model is calling fetch_cached_output virtual tool");
+        
+        let ref_id = arguments
+            .as_ref()
+            .and_then(|args| args.get("ref_id"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "Missing required parameter: ref_id".to_string())?;
+        
+        // Validate start_token is provided and numeric
+        let start_token = arguments
+            .as_ref()
+            .and_then(|args| args.get("start_token"))
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .ok_or_else(|| {
+                "❌ REJECTED: Missing or invalid 'start_token'. MUST provide numeric value (0-20999).\n\
+                 CORRECT EXAMPLE: fetch_cached_output(ref_id='...', start_token=0, end_token=5000)".to_string()
+            })?;
+        
+        // Validate end_token is provided and numeric (REQUIRED - no default)
+        let end_token_requested = arguments
+            .as_ref()
+            .and_then(|args| args.get("end_token"))
+            .and_then(|v| v.as_u64())
+            .map(|n| n as usize)
+            .ok_or_else(|| {
+                format!(
+                    "❌ REJECTED: Missing or invalid 'end_token'. You MUST provide explicit numeric end_token (not 'end' or null).\n\n\
+                     BOTH start_token AND end_token are REQUIRED parameters.\n\n\
+                     CORRECT EXAMPLE:\n  \
+                     fetch_cached_output(ref_id='{}', start_token={}, end_token={})\n\n\
+                     Then continue with:\n  \
+                     fetch_cached_output(ref_id='{}', start_token={}, end_token={})",
+                    ref_id,
+                    start_token,
+                    (start_token + MAX_TOKENS_PER_FETCH).min(MAX_CACHED_TOKENS),
+                    ref_id,
+                    (start_token + MAX_TOKENS_PER_FETCH).min(MAX_CACHED_TOKENS),
+                    (start_token + MAX_TOKENS_PER_FETCH * 2).min(MAX_CACHED_TOKENS)
+                )
+            })?;
+        
+        log::info!(
+            "📥 Model requesting cached content: ref_id='{}', token_range={}-{}",
+            ref_id,
+            start_token,
+            end_token_requested
+        );
+        
+        // Validate start_token is within bounds
+        if start_token >= MAX_CACHED_TOKENS {
+            log::warn!(
+                "⚠️ Requested start_token {} exceeds cache limit {} - returning error",
+                start_token,
+                MAX_CACHED_TOKENS
+            );
+            return Ok(CallToolResult {
+                content: vec![],
+                structured_content: Some(json!({
+                    "error": format!(
+                        "❌ REJECTED: start_token {} exceeds cached limit (0-{}).\n\n\
+                         CORRECT EXAMPLE:\n  \
+                         fetch_cached_output(ref_id='{}', start_token=0, end_token=5000)",
+                        start_token,
+                        MAX_CACHED_TOKENS - 1,
+                        ref_id
+                    ),
+                    "cache_limit": MAX_CACHED_TOKENS
+                })),
+                is_error: Some(true),
+                meta: None,
+            });
+        }
+        
+        // Clamp end_token to cache limit if it exceeds
+        let end_token = end_token_requested.min(MAX_CACHED_TOKENS);
+        
+        if end_token_requested > MAX_CACHED_TOKENS {
+            log::warn!(
+                "⚠️ Requested end_token {} exceeds cache limit {}, clamping to {}",
+                end_token_requested,
+                MAX_CACHED_TOKENS,
+                end_token
+            );
+        }
+        
+        // Enforce maximum tokens per fetch (5K limit)
+        let requested_range_size = end_token.saturating_sub(start_token);
+        if requested_range_size > MAX_TOKENS_PER_FETCH {
+            log::warn!(
+                "🚫 Model requested {} tokens ({}-{}), exceeding per-fetch limit of {} tokens",
+                requested_range_size,
+                start_token,
+                end_token,
+                MAX_TOKENS_PER_FETCH
+            );
+            return Ok(CallToolResult {
+                content: vec![],
+                structured_content: Some(json!({
+                    "error": format!(
+                        "❌ REJECTED: Requested {} tokens ({}-{}) exceeds 5000 token per-call limit.\n\n\
+                         You MUST use smaller ranges. DO NOT use 'end' or omit end_token.\n\n\
+                         CORRECT EXAMPLE:\n  \
+                         fetch_cached_output(ref_id='{}', start_token={}, end_token={})\n\n\
+                         Then continue with:\n  \
+                         fetch_cached_output(ref_id='{}', start_token={}, end_token={})",
+                        requested_range_size,
+                        start_token,
+                        end_token,
+                        ref_id,
+                        start_token,
+                        start_token + MAX_TOKENS_PER_FETCH,
+                        ref_id,
+                        start_token + MAX_TOKENS_PER_FETCH,
+                        (start_token + MAX_TOKENS_PER_FETCH).min(MAX_CACHED_TOKENS) + MAX_TOKENS_PER_FETCH
+                    ),
+                    "requested_size": requested_range_size,
+                    "max_per_fetch": MAX_TOKENS_PER_FETCH,
+                    "correct_call_example": format!("fetch_cached_output(ref_id='{}', start_token={}, end_token={})", ref_id, start_token, start_token + MAX_TOKENS_PER_FETCH)
+                })),
+                is_error: Some(true),
+                meta: None,
+            });
+        }
+        
+        log::info!(
+            "🔄 Processing cache retrieval: {} tokens ({}-{}) | Per-fetch limit: {} | Cache limit: {}",
+            requested_range_size,
+            start_token,
+            end_token,
+            MAX_TOKENS_PER_FETCH,
+            MAX_CACHED_TOKENS
+        );
+        
+        // Retrieve from cache
+        let cache = state.tool_output_cache.inner();
+        let cache_map = cache.lock().await;
+        
+        if let Some(cached) = cache_map.get(ref_id) {
+            let content_result = cached.get_range(start_token, end_token);
+            
+            let content = content_result.map_err(|e| {
+                log::error!("❌ Cache retrieval failed: {}", e);
+                e
+            })?;
+            
+            let retrieved_tokens = content.len() / 4;
+            let progress_pct = (end_token as f64 / MAX_CACHED_TOKENS as f64 * 100.0) as u32;
+            let fetch_size = end_token - start_token;
+            
+            log::info!(
+                "✅ Retrieved {} characters ({} tokens) | Range: {}-{} | Fetch size: {}/{} tokens | Progress: {}/{} ({}%)",
+                content.len(),
+                retrieved_tokens,
+                start_token,
+                end_token,
+                fetch_size,
+                MAX_TOKENS_PER_FETCH,
+                end_token,
+                MAX_CACHED_TOKENS,
+                progress_pct
+            );
+            
+            return Ok(CallToolResult {
+                content: vec![],
+                structured_content: Some(serde_json::json!({
+                    "text": content,
+                    "metadata": {
+                        "ref_id": ref_id,
+                        "token_range": format!("{}-{}", start_token, end_token),
+                        "cache_limit": MAX_CACHED_TOKENS,
+                        "retrieved_tokens": retrieved_tokens,
+                        "progress_percent": progress_pct
+                    }
+                })),
+                is_error: None,
+                meta: None,
+            });
+        } else {
+            return Err(format!("Cache entry not found for ref_id: {}", ref_id));
+        }
+    }
+
     let timeout_duration = tool_call_timeout(&state).await;
     // Set up cancellation if token is provided
     let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
@@ -334,10 +557,145 @@ pub async fn call_tool(
             cancellations.remove(token);
         }
 
-        return result;
+        // Process result and apply caching for large outputs
+        if let Ok(mut call_result) = result {
+            // Serialize result to check size and potentially cache
+            if let Ok(json_str) = serde_json::to_string(&call_result) {
+                use crate::core::mcp::cache::{maybe_cache_output, estimate_tokens, MAX_TOKENS_IN_RESPONSE};
+                
+                let token_count = estimate_tokens(&json_str);
+                
+                // If output is large, cache it and return truncated version
+                if token_count > MAX_TOKENS_IN_RESPONSE {
+                    // Slice to MAX_CACHED_TOKENS before caching
+                    let content_to_cache = if token_count > MAX_CACHED_TOKENS {
+                        log::info!(
+                            "📦 Slicing output from {} tokens to {} tokens (cache limit) for tool '{}'",
+                            token_count,
+                            MAX_CACHED_TOKENS,
+                            tool_name
+                        );
+                        let max_chars = MAX_CACHED_TOKENS * 4;
+                        if json_str.len() > max_chars {
+                            json_str[..max_chars].to_string()
+                        } else {
+                            json_str.clone()
+                        }
+                    } else {
+                        json_str.clone()
+                    };
+                    
+                    if let Some(cached) = maybe_cache_output(
+                        &state.tool_output_cache,
+                        &content_to_cache,
+                        &tool_name,
+                        srv_name,
+                        "application/json",
+                    )
+                    .await
+                    {
+                        log::warn!(
+                            "Tool '{}' output is large ({} tokens). Cached with ref_id: '{}'. \
+                             Returning truncated version. Full output available via fetch_cached_tool_output(ref_id: '{}', start_token, end_token)",
+                            tool_name,
+                            cached.total_tokens,
+                            cached.ref_id,
+                            cached.ref_id
+                        );
+                        
+                        // Return truncated version with cache metadata
+                        let truncated_text = cached.get_truncated(MAX_TOKENS_IN_RESPONSE);
+                        let actual_cached = cached.total_tokens.min(MAX_CACHED_TOKENS);
+                        let cache_footer = format!(
+                            "\n\n--- OUTPUT TRUNCATED ---\n\
+                             Original: {} tokens | Showing: {} tokens | Cached: {} tokens (0-{})\n\
+                             Cache ID: '{}'\n\n\
+                             ⚠️ CRITICAL: To explore cached content, you MUST:\n\
+                             1. Use tool 'fetch_cached_output' with ALL THREE parameters:\n\
+                                - ref_id='{}' (REQUIRED)\n\
+                                - start_token=<number> (REQUIRED, 0-20999)\n\
+                                - end_token=<number> (REQUIRED, 1-21000, MUST be numeric)\n\
+                             2. Range size MUST NOT exceed 5000 tokens: (end_token - start_token ≤ 5000)\n\
+                             3. DO NOT use 'end' or omit end_token - provide explicit numbers\n\n\
+                             CORRECT exploration strategy (copy these exact calls):\n\
+                               fetch_cached_output(ref_id='{}', start_token=0, end_token=5000)\n\
+                               fetch_cached_output(ref_id='{}', start_token=5000, end_token=10000)\n\
+                               fetch_cached_output(ref_id='{}', start_token=10000, end_token=15000)\n\
+                               fetch_cached_output(ref_id='{}', start_token=15000, end_token=20000)\n\n\
+                             If info not found in {} tokens, respond 'not found in available content'.",
+                            cached.total_tokens,
+                            MAX_TOKENS_IN_RESPONSE,
+                            actual_cached,
+                            actual_cached,
+                            cached.ref_id,
+                            cached.ref_id,
+                            cached.ref_id,
+                            cached.ref_id,
+                            cached.ref_id,
+                            cached.ref_id,
+                            MAX_CACHED_TOKENS
+                        );
+                        
+                        // Modify the content to truncated version
+                        // Deserialize as JSON to manipulate content field
+                        if let Ok(mut result_json) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                            // Replace content with truncated text
+                            result_json["content"] = serde_json::json!([{
+                                "type": "text",
+                                "text": format!("{}{}", truncated_text, cache_footer)
+                            }]);
+                            
+                            // Deserialize back to CallToolResult
+                            if let Ok(truncated_result) = serde_json::from_value::<CallToolResult>(result_json) {
+                                return Ok(truncated_result);
+                            }
+                        }
+                        
+                        // Fallback: modify the existing result's content
+                        call_result.content = vec![];
+                        return Ok(call_result);
+                    }
+                }
+            }
+            return Ok(call_result);
+        } else {
+            return result;
+        }
     }
 
     Err(format!("Tool {tool_name} not found"))
+}
+
+/// Fetches a specific range from a cached tool output
+///
+/// # Arguments
+/// * `state` - Application state containing the tool output cache
+/// * `ref_id` - Reference ID of the cached output
+/// * `start_token` - Starting token position (0-based)
+/// * `end_token` - Ending token position (exclusive)
+///
+/// # Returns
+/// * `Result<String, String>` - The requested range of content if successful
+#[tauri::command]
+pub async fn fetch_cached_tool_output(
+    state: State<'_, AppState>,
+    ref_id: String,
+    start_token: usize,
+    end_token: usize,
+) -> Result<String, String> {
+    use crate::core::mcp::cache::get_cached_output;
+
+    log::info!(
+        "Fetching cached output: ref_id='{}', range={}-{}",
+        ref_id,
+        start_token,
+        end_token
+    );
+
+    let cached = get_cached_output(&state.tool_output_cache, &ref_id).await?;
+    let range_content = cached.get_range(start_token, end_token)?;
+
+    Ok(range_content)
 }
 
 /// Cancels a running tool call by its cancellation token
@@ -704,5 +1062,38 @@ pub async fn clear_mcp_remote_auth<R: Runtime>(app: AppHandle<R>) -> Result<(), 
     
     log::info!("Successfully cleared MCP remote auth folder and reset OAuth flags");
     Ok(())
+}
+
+/// Clears all cached tool outputs
+///
+/// # Arguments
+/// * `state` - Application state containing the tool output cache
+///
+/// # Returns
+/// * `Result<(), String>` - Success if cache was cleared
+#[tauri::command]
+pub async fn clear_tool_output_cache(state: State<'_, AppState>) -> Result<(), String> {
+    log::info!("Clearing tool output cache");
+    state.tool_output_cache.clear().await;
+    Ok(())
+}
+
+/// Gets statistics about the tool output cache
+///
+/// # Arguments
+/// * `state` - Application state containing the tool output cache
+///
+/// # Returns
+/// * `Result<CacheStats, String>` - Cache statistics if successful
+#[tauri::command]
+pub async fn get_cache_stats(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    use crate::core::mcp::cache::CacheStats;
+    
+    let stats = state.tool_output_cache.stats().await;
+    Ok(serde_json::json!({
+        "totalEntries": stats.total_entries,
+        "totalBytes": stats.total_bytes,
+        "totalTokens": stats.total_tokens
+    }))
 }
 

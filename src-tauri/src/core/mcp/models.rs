@@ -85,6 +85,14 @@ fn default_backoff_multiplier() -> f64 {
     super::constants::DEFAULT_MCP_BACKOFF_MULTIPLIER
 }
 
+fn default_cache_ttl_seconds() -> u64 {
+    3600 // 1 hour default
+}
+
+fn default_cache_cleanup_interval_seconds() -> u64 {
+    600 // 10 minutes default
+}
+
 /// Runtime MCP settings that can be adjusted via UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -97,6 +105,12 @@ pub struct McpSettings {
     pub max_restart_delay_ms: u64,
     #[serde(default = "default_backoff_multiplier")]
     pub backoff_multiplier: f64,
+    /// TTL for cached tool outputs in seconds (default: 3600 = 1 hour)
+    #[serde(default = "default_cache_ttl_seconds")]
+    pub cache_ttl_seconds: u64,
+    /// Interval for automatic cache cleanup in seconds (default: 600 = 10 minutes)
+    #[serde(default = "default_cache_cleanup_interval_seconds")]
+    pub cache_cleanup_interval_seconds: u64,
 }
 
 impl Default for McpSettings {
@@ -106,6 +120,8 @@ impl Default for McpSettings {
             base_restart_delay_ms: super::constants::DEFAULT_MCP_BASE_RESTART_DELAY_MS,
             max_restart_delay_ms: super::constants::DEFAULT_MCP_MAX_RESTART_DELAY_MS,
             backoff_multiplier: super::constants::DEFAULT_MCP_BACKOFF_MULTIPLIER,
+            cache_ttl_seconds: 3600,
+            cache_cleanup_interval_seconds: 600,
         }
     }
 }

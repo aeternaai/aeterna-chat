@@ -19,6 +19,9 @@ export type ToolResult = {
 }
 
 // Helper function to convert the tool's output part into an API content part
+// Set to true to include images in tool responses (requires multimodal model support)
+const INCLUDE_IMAGES_IN_TOOL_RESPONSES = false
+
 const convertToolPartToApiContentPart = (part: ToolResult['content'][0]) => {
   if (part.text) {
     return { type: 'text', text: part.text }
@@ -26,6 +29,16 @@ const convertToolPartToApiContentPart = (part: ToolResult['content'][0]) => {
 
   // Handle base64 image data
   if (part.data) {
+    // Check if images should be included
+    if (!INCLUDE_IMAGES_IN_TOOL_RESPONSES) {
+      // Convert image to text description instead of sending raw image data
+      const mimeType = part.type === 'image' ? 'image/png' : part.type || 'image/png'
+      return { 
+        type: 'text', 
+        text: `[Image content (${mimeType}) - ${Math.round(part.data.length / 1024)}KB - omitted for non-multimodal model]` 
+      }
+    }
+
     // Assume default image type, though a proper tool should return the mime type
     const mimeType =
       part.type === 'image' ? 'image/png' : part.type || 'image/png'
@@ -42,6 +55,12 @@ const convertToolPartToApiContentPart = (part: ToolResult['content'][0]) => {
 
   // Handle pre-formatted image URL
   if (part.image_url) {
+    if (!INCLUDE_IMAGES_IN_TOOL_RESPONSES) {
+      return { 
+        type: 'text', 
+        text: `[Image URL: ${part.image_url.url.substring(0, 100)}... - omitted for non-multimodal model]` 
+      }
+    }
     return { type: 'image_url', image_url: part.image_url }
   }
 
