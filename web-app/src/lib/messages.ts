@@ -16,6 +16,7 @@ export type ToolResult = {
     image_url?: { url: string; detail?: string }
   }>
   error?: string
+  meta?: Record<string, any>  // Add meta field for ephemeral flag
 }
 
 // Helper function to convert the tool's output part into an API content part
@@ -185,6 +186,20 @@ export class CompletionMessagesBuilder {
    * @param toolCallId - The ID of the tool call associated with the message.
    */
   addToolMessage(result: string | ToolResult, toolCallId: string) {
+    console.warn('🚨 [EPHEMERAL CHECK] addToolMessage called')
+    console.warn('🚨 [EPHEMERAL CHECK] Result:', JSON.stringify(result, null, 2))
+    
+    // Check for ephemeral flag - check both 'meta' and '_meta' (Tauri serialization may add underscore)
+    if (typeof result !== 'string' && (
+      result.meta?.ephemeral === true || 
+      (result as any)._meta?.ephemeral === true
+    )) {
+      console.warn('🚨 [EPHEMERAL] ✅ SKIPPED - Found ephemeral=true')
+      return
+    }
+    
+    console.warn('🚨 [EPHEMERAL CHECK] NOT ephemeral, adding to history')
+    
     let content: string | any[] = ''
 
     // Handle simple string case

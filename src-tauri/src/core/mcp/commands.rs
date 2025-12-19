@@ -460,7 +460,14 @@ pub async fn call_tool(
                 progress_pct
             );
             
-            return Ok(CallToolResult {
+            // Mark as ephemeral - frontend should not persist this in conversation history
+            let mut meta_map = Map::new();
+            meta_map.insert("ephemeral".to_string(), json!(true));
+            meta_map.insert("is_cache_fetch".to_string(), json!(true));
+            meta_map.insert("chunk_range".to_string(), json!(format!("{}-{}", start_token, end_token)));
+            meta_map.insert("ref_id".to_string(), json!(ref_id));
+            
+            let result = CallToolResult {
                 content: vec![],
                 structured_content: Some(serde_json::json!({
                     "text": content,
@@ -473,8 +480,20 @@ pub async fn call_tool(
                     }
                 })),
                 is_error: None,
-                meta: None,
-            });
+                meta: Some(rmcp::model::Meta(meta_map.clone())),
+            };
+            
+            // Comprehensive debug logging
+            log::warn!("🚨 [EPHEMERAL] fetch_cached_output returning with ephemeral=true");
+            log::warn!("🚨 [EPHEMERAL] meta field: {:?}", result.meta);
+            log::warn!("🚨 [EPHEMERAL] meta_map contents: {:?}", meta_map);
+            
+            // Log the full JSON that will be sent to frontend
+            if let Ok(json) = serde_json::to_string(&result) {
+                log::warn!("🚨 [EPHEMERAL] Full JSON response:\n{}", json);
+            }
+            
+            return Ok(result);
         } else {
             return Err(format!("Cache entry not found for ref_id: {}", ref_id));
         }

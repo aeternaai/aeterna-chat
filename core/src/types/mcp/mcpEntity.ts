@@ -22,6 +22,8 @@ export interface MCPToolCallResult {
       showing_range?: string
     }
   }>
+  /** Meta field for tool execution metadata (e.g., ephemeral flag) */
+  meta?: Record<string, any>
 }
 
 /** Cache metadata for large tool outputs */

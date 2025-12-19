@@ -718,6 +718,11 @@ export const postMessageProcessing = async (
             error: 'disallowed',
           }
 
+      console.warn('🚨 [TOOL RESULT] Received:', {
+        tool: toolCall.function.name,
+        result: JSON.stringify(result, null, 2)
+      })
+
       if (typeof result === 'string') {
         result = {
           content: [
@@ -744,6 +749,7 @@ export const postMessageProcessing = async (
           },
         ],
       }
+      
       builder.addToolMessage(result as ToolResult, toolCall.id)
 
       // Proactive mode: Capture screenshot/snapshot after browser tool execution
