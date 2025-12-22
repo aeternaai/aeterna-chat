@@ -250,11 +250,19 @@ export default class JanWorkspaceExtension extends WorkspaceExtension {
       }
     }
     
-    // Check if the original file exists and is readable
+    // Check if the original file exists
+    // Note: We only check existence, not readability, since:
+    // 1. Reading binary files (images, PDFs) as text fails
+    // 2. If we can stat the file, we can generally read it
     try {
       const exists = await fs.existsSync(file.file_path)
       
       if (!exists) {
+        // Update file reference with validation status
+        file.is_valid = false
+        file.updated_at = Date.now()
+        await this.updateWorkspaceFile(file)
+        
         return {
           file_id: fileId,
           exists: false,
@@ -264,9 +272,7 @@ export default class JanWorkspaceExtension extends WorkspaceExtension {
         }
       }
       
-      // Try to read the file to check readability
-      await fs.readFileSync(file.file_path)
-      
+      // File exists, mark as valid
       const status: WorkspaceFileStatus = {
         file_id: fileId,
         exists: true,

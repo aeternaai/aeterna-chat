@@ -57,12 +57,9 @@ export const AddFileToWorkspaceDialog = ({
 
     setIsAdding(true)
     try {
-      // Convert to file:// URI if needed
-      const fileUri = selectedFilePath.startsWith('file://')
-        ? selectedFilePath
-        : `file://${selectedFilePath}`
-
-      await addFileToWorkspace(workspaceId, fileUri)
+      // Use the path directly - Tauri dialog returns absolute paths
+      // The file:// protocol should only be used for paths relative to Jan data folder
+      await addFileToWorkspace(workspaceId, selectedFilePath)
       toast.success(t('workspace.success.fileAdded'))
       onOpenChange(false)
       setSelectedFilePath('')
