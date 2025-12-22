@@ -16,6 +16,7 @@ export enum ExtensionTypeEnum {
   RAG = 'rag',
   VectorDB = 'vectorDB',
   Router = 'router',
+  Workspace = 'workspace',
 }
 
 export interface ExtensionType {
@@ -266,3 +267,91 @@ export abstract class BaseExtension implements ExtensionType {
     })
   }
 }
+
+/**
+ * Workspace extension for managing workspaces and file references.
+ * Provides abstraction layer for different storage implementations.
+ * @extends BaseExtension
+ */
+export abstract class WorkspaceExtension extends BaseExtension {
+  /**
+   * Returns the type of the extension.
+   * @returns {ExtensionTypeEnum} The type of the extension
+   */
+  override type(): ExtensionTypeEnum {
+    return ExtensionTypeEnum.Workspace
+  }
+
+  /**
+   * Creates a new workspace.
+   * @abstract
+   */
+  abstract createWorkspace(workspace: any): Promise<void>
+
+  /**
+   * Updates an existing workspace.
+   * @abstract
+   */
+  abstract updateWorkspace(workspace: any): Promise<void>
+
+  /**
+   * Deletes an existing workspace.
+   * @abstract
+   */
+  abstract deleteWorkspace(workspaceId: string): Promise<void>
+
+  /**
+   * Retrieves a specific workspace by ID.
+   * @abstract
+   */
+  abstract getWorkspace(workspaceId: string): Promise<any>
+
+  /**
+   * Retrieves all existing workspaces.
+   * @abstract
+   */
+  abstract getWorkspaces(): Promise<any[]>
+
+  /**
+   * Adds a file reference to a workspace.
+   * @abstract
+   */
+  abstract addFileToWorkspace(file: any): Promise<void>
+
+  /**
+   * Removes a file reference from a workspace.
+   * @abstract
+   */
+  abstract removeFileFromWorkspace(fileId: string): Promise<void>
+
+  /**
+   * Updates a file reference in a workspace.
+   * @abstract
+   */
+  abstract updateWorkspaceFile(file: any): Promise<void>
+
+  /**
+   * Retrieves a specific file reference by ID.
+   * @abstract
+   */
+  abstract getWorkspaceFile(fileId: string): Promise<any>
+
+  /**
+   * Retrieves all file references for a specific workspace.
+   * @abstract
+   */
+  abstract getWorkspaceFiles(workspaceId: string): Promise<any[]>
+
+  /**
+   * Validates that a file reference still points to an existing file.
+   * @abstract
+   */
+  abstract validateFileReference(fileId: string): Promise<any>
+
+  /**
+   * Validates all file references in a workspace.
+   * @abstract
+   */
+  abstract validateWorkspaceFiles(workspaceId: string): Promise<any[]>
+}
+
