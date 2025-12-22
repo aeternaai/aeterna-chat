@@ -1,0 +1,148 @@
+<mxfile host="65bd71144e">
+    <diagram name="Proactive Notification System" id="notification-system">
+        <mxGraphModel dx="830" dy="707" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="AeternaAI - Proactive Notification System" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="450" y="30" width="500" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="sources_title" value="Event Sources (External Systems)" style="text;html=1;strokeColor=#666666;fillColor=#f5f5f5;fontColor=#333333;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="40" y="100" width="300" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="email_source" value="&lt;b&gt;Email System&lt;/b&gt;&lt;br&gt;&lt;br&gt;New emails&lt;br&gt;Replies&lt;br&gt;Important senders" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="150" width="120" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="calendar_source" value="&lt;b&gt;Calendar&lt;/b&gt;&lt;br&gt;&lt;br&gt;Meetings&lt;br&gt;Deadlines&lt;br&gt;Events" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="190" y="150" width="120" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="jira_source" value="&lt;b&gt;Jira&lt;/b&gt;&lt;br&gt;&lt;br&gt;Ticket updates&lt;br&gt;Mentions&lt;br&gt;Assignments" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="260" width="120" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="confluence_source" value="&lt;b&gt;Confluence&lt;/b&gt;&lt;br&gt;&lt;br&gt;Page updates&lt;br&gt;Comments&lt;br&gt;Mentions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="190" y="260" width="120" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="slack_source" value="&lt;b&gt;Slack/Chat&lt;/b&gt;&lt;br&gt;&lt;br&gt;DMs&lt;br&gt;Channel msgs&lt;br&gt;@mentions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="370" width="120" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="github_source" value="&lt;b&gt;GitHub/Git&lt;/b&gt;&lt;br&gt;&lt;br&gt;PR reviews&lt;br&gt;Issues&lt;br&gt;Comments" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="190" y="370" width="120" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="monitor_title" value="Monitoring &amp; Ingestion Layer" style="text;html=1;strokeColor=#d6b656;fillColor=#fff2cc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="380" y="100" width="260" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="event_monitor" value="&lt;b&gt;Event Monitor Service&lt;/b&gt;&lt;br&gt;(Background Worker)&lt;br&gt;&lt;br&gt;• Poll/Webhook listeners&lt;br&gt;• Rate limiting&lt;br&gt;• Event normalization&lt;br&gt;• Deduplication&lt;br&gt;• Queue management" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=10;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="150" width="260" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_email_monitor" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.2;entryDx=0;entryDy=0;" parent="1" source="email_source" target="event_monitor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_calendar_monitor" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;" parent="1" source="calendar_source" target="event_monitor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_jira_monitor" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="jira_source" target="event_monitor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_confluence_monitor" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.6;entryDx=0;entryDy=0;" parent="1" source="confluence_source" target="event_monitor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_slack_monitor" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.8;entryDx=0;entryDy=0;" parent="1" source="slack_source" target="event_monitor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_github_monitor" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.9;entryDx=0;entryDy=0;" parent="1" source="github_source" target="event_monitor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="event_label" value="Webhooks / Polling" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontStyle=2" parent="1" vertex="1">
+                    <mxGeometry x="320" y="230" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="decision_title" value="AI Intelligence Layer" style="text;html=1;strokeColor=#b85450;fillColor=#f8cecc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="380" y="340" width="260" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="relevance_analyzer" value="&lt;b&gt;Relevance Analyzer&lt;/b&gt;&lt;br&gt;(LLM-powered)&lt;br&gt;&lt;br&gt;Questions:&lt;br&gt;• Is this relevant to user&#39;s work?&lt;br&gt;• What&#39;s the priority/urgency?&lt;br&gt;• What topic/project is it about?&lt;br&gt;• Does it need immediate action?&lt;br&gt;• What context is needed?" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=10;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="390" width="260" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_monitor_analyzer" value="Raw Events" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="event_monitor" target="relevance_analyzer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="user_context" value="&lt;b&gt;User Context Store&lt;/b&gt;&lt;br&gt;&lt;br&gt;• Current projects&lt;br&gt;• Assigned tasks&lt;br&gt;• Recent docs viewed&lt;br&gt;• Work patterns&lt;br&gt;• Preferences" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacingLeft=10;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="730" y="400" width="180" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_analyzer_context" value="Check Relevance" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;dashed=1;" parent="1" source="relevance_analyzer" target="user_context" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="context_title" value="Context Enrichment Layer" style="text;html=1;strokeColor=#82b366;fillColor=#d5e8d4;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="380" y="580" width="260" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="context_gatherer" value="&lt;b&gt;Context Gatherer&lt;/b&gt;&lt;br&gt;&lt;br&gt;For relevant events:&lt;br&gt;1. Extract key topics/entities&lt;br&gt;2. Query knowledge base (RAG)&lt;br&gt;3. Retrieve related docs&lt;br&gt;4. Query related MCP sources&lt;br&gt;5. Build comprehensive context" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=10;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="630" width="260" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_analyzer_gatherer" value="Relevant Events" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="relevance_analyzer" target="context_gatherer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="rag_integration" value="&lt;b&gt;RAG System&lt;/b&gt;&lt;br&gt;&lt;br&gt;Vector DB&lt;br&gt;Knowledge Base&lt;br&gt;Workspace Docs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="610" width="180" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="mcp_integration" value="&lt;b&gt;MCP Servers&lt;/b&gt;&lt;br&gt;&lt;br&gt;Jira API&lt;br&gt;Confluence API&lt;br&gt;GitHub API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="720" width="180" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_gatherer_rag" value="Query" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.33;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="context_gatherer" target="rag_integration" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_gatherer_mcp" value="Query" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.67;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="context_gatherer" target="mcp_integration" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="generation_title" value="Notification Generation Layer" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="380" y="810" width="260" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="notification_generator" value="&lt;b&gt;Notification Generator&lt;/b&gt;&lt;br&gt;(LLM-powered)&lt;br&gt;&lt;br&gt;Creates:&lt;br&gt;• Summary of event&lt;br&gt;• Why it&#39;s relevant&lt;br&gt;• Context from sources&lt;br&gt;• Suggested actions/responses&lt;br&gt;• Source citations&lt;br&gt;• Priority level" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacingLeft=10;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="860" width="260" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_gatherer_generator" value="Enriched Context" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="context_gatherer" target="notification_generator" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="delivery_title" value="Delivery Layer" style="text;html=1;strokeColor=#666666;fillColor=#f5f5f5;fontColor=#333333;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="900" y="860" width="220" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="delivery_manager" value="&lt;b&gt;Delivery Manager&lt;/b&gt;&lt;br&gt;&lt;br&gt;• OS Notifications&lt;br&gt;• In-app Notifications&lt;br&gt;• Notification Center&lt;br&gt;• Priority Routing&lt;br&gt;• Do Not Disturb Rules" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;align=left;verticalAlign=top;spacingLeft=10;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="910" width="220" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_generator_delivery" value="Formatted Notification" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="notification_generator" target="delivery_manager" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="user_notification" value="&lt;b&gt;User&lt;/b&gt;&lt;br&gt;&lt;br&gt;Receives:&lt;br&gt;• Desktop notification&lt;br&gt;• In-app alert&lt;br&gt;• Can act immediately" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;verticalAlign=top;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="1170" y="910" width="180" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_delivery_user" value="Display" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" parent="1" source="delivery_manager" target="user_notification" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="example_title" value="Example: Email About Feature X" style="text;html=1;strokeColor=#d79b00;fillColor=#ffe6cc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="920" y="100" width="430" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="example_box" value="&lt;b&gt;Step-by-Step Flow:&lt;/b&gt;&lt;br&gt;&lt;br&gt;1. &lt;b&gt;Event:&lt;/b&gt; Email arrives from client asking about &quot;Feature X&quot;&lt;br&gt;&lt;br&gt;2. &lt;b&gt;Monitor:&lt;/b&gt; Event Monitor detects new email via webhook&lt;br&gt;&lt;br&gt;3. &lt;b&gt;Analyze:&lt;/b&gt; Relevance Analyzer (LLM) determines:&lt;br&gt;   • Sender is important client&lt;br&gt;   • User is working on Feature X (from User Context)&lt;br&gt;   • Question requires response → HIGH PRIORITY&lt;br&gt;&lt;br&gt;4. &lt;b&gt;Gather Context:&lt;/b&gt; Context Gatherer:&lt;br&gt;   • Extracts topic: &quot;Feature X&quot;&lt;br&gt;   • Queries Vector DB for Feature X docs&lt;br&gt;   • Retrieves Confluence pages about Feature X&lt;br&gt;   • Queries Jira for related tickets&lt;br&gt;&lt;br&gt;5. &lt;b&gt;Generate:&lt;/b&gt; Notification Generator creates:&lt;br&gt;   &lt;i&gt;&quot;📧 Email from [Client] about Feature X&lt;br&gt;   &lt;br&gt;   Summary: Client asks about deployment timeline&lt;br&gt;   &lt;br&gt;   Relevant docs found:&lt;br&gt;   • Feature X Spec (Confluence)&lt;br&gt;   • TICKET-123: Feature X Deploy (Jira)&lt;br&gt;   &lt;br&gt;   Suggested response:&lt;br&gt;   &#39;Feature X is scheduled for Q1 deploy per TICKET-123....&#39;&lt;br&gt;   &lt;br&gt;   [View Details] [Draft Reply] [Dismiss]&quot;&lt;/i&gt;&lt;br&gt;&lt;br&gt;6. &lt;b&gt;Deliver:&lt;/b&gt; OS notification + in-app alert&lt;br&gt;&lt;br&gt;7. &lt;b&gt;User Action:&lt;/b&gt; Clicks &quot;Draft Reply&quot; → opens email client&lt;br&gt;   with pre-populated response using gathered context" style="text;html=1;strokeColor=#d79b00;fillColor=#ffe6cc;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=11;spacingLeft=10;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="920" y="150" width="430" height="480" as="geometry"/>
+                </mxCell>
+                <mxCell id="features_box" value="&lt;b&gt;Key Features:&lt;/b&gt;&lt;br&gt;&lt;br&gt;✓ Truly proactive (not reactive)&lt;br&gt;✓ Context-aware intelligence&lt;br&gt;✓ Multi-source information synthesis&lt;br&gt;✓ Actionable suggestions&lt;br&gt;✓ Respects user preferences&lt;br&gt;✓ Privacy-first (all local)&lt;br&gt;✓ Reduces cognitive load&lt;br&gt;✓ Saves time on context switching" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=11;spacingLeft=10;spacingTop=5;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="920" y="660" width="240" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="tech_box" value="&lt;b&gt;Technical Considerations:&lt;/b&gt;&lt;br&gt;&lt;br&gt;• Rate limiting on external APIs&lt;br&gt;• Exponential backoff for retries&lt;br&gt;• Event deduplication&lt;br&gt;• User preference learning&lt;br&gt;• Battery/resource optimization&lt;br&gt;• Privacy: no data leaves device&lt;br&gt;• Configurable monitoring intervals&lt;br&gt;• Notification fatigue prevention" style="text;html=1;strokeColor=#b85450;fillColor=#f8cecc;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=11;spacingLeft=10;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="1180" y="660" width="240" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="filter_system" value="&lt;b&gt;Filter &amp; Learning System&lt;/b&gt;&lt;br&gt;&lt;br&gt;• User dismisses notification → Learn&lt;br&gt;• Track which notifications are acted on&lt;br&gt;• Adjust relevance scoring over time&lt;br&gt;• Explicit ignore rules&lt;br&gt;• Time-of-day preferences" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;align=left;verticalAlign=top;spacingLeft=10;spacingTop=5;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="630" width="260" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_filter_analyzer" value="Feedback Loop" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;dashed=1;dashPattern=8 8;strokeColor=#666666;" parent="1" source="filter_system" target="relevance_analyzer" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="edge_user_filter" value="User Feedback&lt;br&gt;(dismiss/act)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;dashPattern=8 8;strokeColor=#666666;" parent="1" source="user_notification" target="filter_system" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1170" y="1040"/>
+                            <mxPoint x="350" y="1040"/>
+                            <mxPoint x="350" y="700"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

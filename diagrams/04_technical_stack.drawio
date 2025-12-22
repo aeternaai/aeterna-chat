@@ -1,0 +1,379 @@
+<mxfile host="65bd71144e">
+    <diagram name="Technical Stack" id="tech-stack">
+        <mxGraphModel dx="830" dy="707" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="AeternaAI - Technical Stack Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=22;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="500" y="20" width="600" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend_title" value="Legend:" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="40" y="80" width="80" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend_inherited" value="Inherited from Jan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="110" width="140" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend_new" value="New for AeternaAI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="150" width="140" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend_enhanced" value="Enhanced/Extended" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="190" width="140" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="layer1_title" value="LAYER 1: FRONTEND / UI" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="240" y="80" width="1320" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="frontend_grid_header" value="Entity" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="125" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="frontend_tech_header" value="Technology" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="125" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="frontend_purpose_header" value="Purpose" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="125" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="frontend_notes_header" value="Notes" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="125" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_entity" value="UI Framework" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="155" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_tech" value="React 18" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="155" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_purpose" value="Component-based UI rendering" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="155" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f1_notes" value="From Jan - Modern hooks, concurrent features" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="155" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f2_entity" value="Routing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="185" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f2_tech" value="TanStack Router" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="185" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f2_purpose" value="Type-safe routing, navigation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="185" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f2_notes" value="From Jan - Replaces React Router" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="185" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f3_entity" value="State Management" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="215" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f3_tech" value="Zustand" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="215" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f3_purpose" value="Global state, threads, messages, workspaces" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="215" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f3_notes" value="From Jan - Lightweight, no boilerplate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="215" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f4_entity" value="UI Components" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="245" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f4_tech" value="Radix UI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="245" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f4_purpose" value="Accessible, unstyled primitives" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="245" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f4_notes" value="From Jan - Modals, dropdowns, tooltips" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="245" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f5_entity" value="Build Tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="275" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f5_tech" value="Vite" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="275" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f5_purpose" value="Fast dev server, HMR, bundling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="275" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="f5_notes" value="From Jan - ES modules, optimized builds" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="275" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="layer2_title" value="LAYER 2: NATIVE / BACKEND" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="240" y="330" width="1320" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="b1_entity" value="Native Runtime" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="365" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b1_tech" value="Tauri 2.0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="365" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b1_purpose" value="Rust backend, webview frontend bridge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="365" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b1_notes" value="From Jan - Cross-platform, secure IPC, smaller than Electron" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="365" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2_entity" value="Backend Language" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="395" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2_tech" value="Rust" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="395" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2_purpose" value="Core logic, file ops, system integration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="395" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2_notes" value="From Jan - Memory safe, fast, concurrent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="395" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b3_entity" value="Async Runtime" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="425" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b3_tech" value="Tokio" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="425" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b3_purpose" value="Async I/O, background tasks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="425" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b3_notes" value="From Jan - Powers file sync, event monitoring" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="425" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b4_entity" value="MCP Protocol Implementation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="455" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b4_tech" value="rmcp (Rust MCP SDK)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="455" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b4_purpose" value="MCP server lifecycle, tool calling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="455" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b4_notes" value="From Jan - Stdio/SSE/HTTP transports, auto-restart" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="455" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b5_entity" value="File System Monitor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="485" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b5_tech" value="notify (Rust)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="485" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b5_purpose" value="Watch folders, detect file changes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="485" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b5_notes" value="New - Cross-platform FS events (inotify/FSEvents/ReadDirectoryChangesW)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="485" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b6_entity" value="Event Monitor Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="515" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b6_tech" value="Tokio tasks + reqwest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="515" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b6_purpose" value="Poll external APIs, webhook handling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="515" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b6_notes" value="New - Background workers for email/calendar/Jira polling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="515" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="layer3_title" value="LAYER 3: AI / ML" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="240" y="570" width="1320" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai1_entity" value="LLM Inference Engine" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="605" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai1_tech" value="llama.cpp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="605" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai1_purpose" value="Local LLM execution (CPU/GPU)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="605" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai1_notes" value="From Jan - GGUF format, quantization, Metal/CUDA/Vulkan support" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="605" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai2_entity" value="Embedding Model" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="635" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai2_tech" value="nomic-embed-text(?)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="635" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai2_purpose" value="Text → vector embeddings for RAG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="635" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai2_notes" value="Recommended - 768-dim, runs via llama.cpp, efficient for local" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="635" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai3_entity" value="Document Processor / Chunking" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="665" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai3_tech" value="unstructured + Rust wrappers&lt;br&gt;use DocLing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="665" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai3_purpose" value="Parse PDFs/docs, extract text, chunk" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="665" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai3_notes" value="Recommended - Handles 20+ formats, semantic chunking available" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="665" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai4_entity" value="Query Router / Orchestrator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="695" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai4_tech" value="Custom Rust logic + LLM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="695" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai4_purpose" value="Route queries to RAG/MCP/simple paths" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="695" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai4_notes" value="Enhanced - Build on Jan&#39;s message handling, add intent classification" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="695" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai5_entity" value="Relevance Analyzer (Notifications)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="725" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai5_tech" value="LLM via llama.cpp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="725" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai5_purpose" value="Determine event relevance, priority" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="725" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ai5_notes" value="New - Small prompt, fast inference for notification filtering" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="725" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="layer4_title" value="LAYER 4: STORAGE &amp; DATA" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="240" y="780" width="1320" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_entity" value="Vector Database" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="815" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_tech" value="Qdrant (embedded mode)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="815" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_purpose" value="Store embeddings, similarity search" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="815" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_notes" value="Recommended - Pure Rust, embeddable, fast, workspace filtering support" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="815" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_entity" value="Metadata Store" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="845" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_tech" value="SQLite (via rusqlite)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="845" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_purpose" value="Workspaces, file refs, permissions, mappings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="845" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_notes" value="Recommended - Embedded, transactional, zero-config, file-based" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="845" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_entity" value="User Context Store" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="875" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_tech" value="SQLite (same DB)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="875" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_purpose" value="User preferences, work patterns, history" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="875" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_notes" value="Recommended - Shared with metadata for joins, simpler architecture" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="875" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_entity" value="File Reference Store" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="905" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_tech" value="SQLite (same DB)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="905" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_purpose" value="File paths, workspace associations, sync status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="905" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_notes" value="Recommended - Single DB for all metadata simplifies backups/sync" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="905" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_entity" value="Configuration Storage" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="935" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_tech" value="JSON files (Tauri API)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="935" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_purpose" value="App settings, MCP config, model settings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="935" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_notes" value="From Jan - Human-readable, version-controllable config files" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="935" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="layer5_title" value="LAYER 5: EXTERNAL INTEGRATIONS" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="240" y="990" width="1320" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="i1_entity" value="MCP Servers (External)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1025" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i1_tech" value="Node.js / Python servers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="1025" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i1_purpose" value="Jira, Confluence, GitHub, Email APIs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="1025" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i1_notes" value="Enhanced - Use community MCP servers, custom ones as needed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="1025" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i2_entity" value="HTTP Client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1055" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i2_tech" value="reqwest (Rust)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="1055" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i2_purpose" value="REST API calls, webhook delivery" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="1055" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i2_notes" value="From Jan - Async, connection pooling, timeout handling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="1055" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i3_entity" value="OS Notifications" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1085" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i3_tech" value="Tauri notification API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="1085" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i3_purpose" value="Desktop notifications delivery" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="1085" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="i3_notes" value="Recommended - Cross-platform native notifications" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="1085" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="layer6_title" value="LAYER 6: BUILD &amp; DEVELOPMENT" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1140" width="1320" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_entity" value="Package Manager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1175" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_tech" value="Yarn Workspaces" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="1175" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_purpose" value="Monorepo management" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="1175" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1_notes" value="From Jan - core, web-app, extensions in single repo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="1175" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_entity" value="Build Orchestration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1205" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_tech" value="Make + Cargo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="1205" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_purpose" value="Build order management, cross-platform" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="1205" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2_notes" value="From Jan - Handles extensions → core → web-app → Tauri" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="1205" width="520" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_entity" value="Testing Framework" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="1235" width="280" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_tech" value="Vitest + Cargo test" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="1235" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_purpose" value="Unit/integration tests" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="1235" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3_notes" value="From Jan - TS tests with Vitest, Rust tests with built-in framework" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="1235" width="520" height="30" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
