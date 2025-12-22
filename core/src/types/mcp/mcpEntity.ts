@@ -14,7 +14,24 @@ export interface MCPToolCallResult {
   content: Array<{
     type?: string
     text: string
+    /** Optional metadata for cached outputs */
+    metadata?: {
+      cached?: boolean
+      ref_id?: string
+      total_tokens?: number
+      showing_range?: string
+    }
   }>
+  /** Meta field for tool execution metadata (e.g., ephemeral flag) */
+  meta?: Record<string, any>
+}
+
+/** Cache metadata for large tool outputs */
+export interface CacheMetadata {
+  refId: string
+  totalTokens: number
+  showingRange: string
+  fetchInstruction: string
 }
 
 export interface MCPServerInfo {

@@ -93,6 +93,9 @@ pub fn run() {
             core::mcp::commands::get_tools,
             core::mcp::commands::call_tool,
             core::mcp::commands::cancel_tool_call,
+            core::mcp::commands::fetch_cached_tool_output,
+            core::mcp::commands::clear_tool_output_cache,
+            core::mcp::commands::get_cache_stats,
             core::mcp::commands::restart_mcp_servers,
             core::mcp::commands::get_connected_servers,
             core::mcp::commands::save_mcp_configs,
@@ -148,6 +151,7 @@ pub fn run() {
             mcp_oauth_url_opened: Arc::new(Mutex::new(HashMap::new())),
             router_process: Arc::new(Mutex::new(None)),
             router_config: Arc::new(Mutex::new(RouterConfig::default())),
+            tool_output_cache: Default::default(),
         })
         .setup(|app| {
             app.handle().plugin(

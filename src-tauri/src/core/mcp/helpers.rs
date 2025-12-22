@@ -183,7 +183,39 @@ pub async fn run_mcp_commands<R: Runtime>(
         "MCP server initialization complete: {successful_count} successful, {failed_count} failed"
     );
 
+    // Start automatic cache cleanup task
+    start_cache_cleanup_task(app.clone());
+
     Ok(())
+}
+
+/// Start a background task that periodically cleans up expired cached tool outputs
+fn start_cache_cleanup_task<R: Runtime>(app: AppHandle<R>) {
+    tokio::spawn(async move {
+        loop {
+            // Get cleanup interval from settings
+            let cleanup_interval = {
+                let state = app.state::<AppState>();
+                let settings = state.mcp_settings.lock().await;
+                settings.cache_cleanup_interval_seconds
+            };
+
+            // Wait for the cleanup interval
+            sleep(Duration::from_secs(cleanup_interval)).await;
+
+            // Perform cleanup
+            let state = app.state::<AppState>();
+            let ttl = {
+                let settings = state.mcp_settings.lock().await;
+                settings.cache_ttl_seconds
+            };
+
+            log::debug!("Running automatic cache cleanup (TTL: {} seconds)", ttl);
+            state.tool_output_cache.cleanup_old(ttl).await;
+        }
+    });
+    
+    log::info!("Started automatic cache cleanup background task");
 }
 
 /// Monitor MCP server health without removing it from the HashMap

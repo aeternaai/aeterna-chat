@@ -98,4 +98,9 @@ export class DefaultMCPService implements MCPService {
     console.log('clearMcpRemoteAuth called')
     // No-op - not implemented in default service
   }
+
+  async fetchCachedToolOutput(refId: string, startToken: number, endToken: number): Promise<string> {
+    console.log('fetchCachedToolOutput called:', { refId, startToken, endToken })
+    throw new Error('fetchCachedToolOutput not implemented in default service')
+  }
 }

@@ -31,6 +31,9 @@ export interface MCPService {
     cancellationToken?: string
   }): ToolCallWithCancellationResult
   cancelToolCall(cancellationToken: string): Promise<void>
+  
+  // Cache management for large tool outputs
+  fetchCachedToolOutput(refId: string, startToken: number, endToken: number): Promise<string>
 
   // MCP Server lifecycle management
   activateMCPServer(name: string, config: MCPServerConfig): Promise<void>

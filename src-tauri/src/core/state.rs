@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::core::{
     downloads::models::DownloadManagerState,
+    mcp::cache::ToolOutputCache,
     mcp::models::{McpSettings, OAuthToken},
     mcp::oauth::PendingOAuthFlow,
     router::models::RouterConfig,
@@ -43,6 +44,8 @@ pub struct AppState {
     // Router service state
     pub router_process: Arc<Mutex<Option<Child>>>,
     pub router_config: Arc<Mutex<RouterConfig>>,
+    // Tool output cache for large MCP responses
+    pub tool_output_cache: ToolOutputCache,
 }
 
 impl RunningServiceEnum {

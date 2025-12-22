@@ -16,16 +16,32 @@ export type ToolResult = {
     image_url?: { url: string; detail?: string }
   }>
   error?: string
+  meta?: Record<string, any>  // Add meta field for ephemeral flag
 }
 
 // Helper function to convert the tool's output part into an API content part
-const convertToolPartToApiContentPart = (part: ToolResult['content'][0]) => {
+// Set to true to include images in tool responses (requires multimodal model support)
+const INCLUDE_IMAGES_IN_TOOL_RESPONSES = true
+
+const convertToolPartToApiContentPart = (part: ToolResult['content'][0], modelSupportsVision: boolean) => {
   if (part.text) {
     return { type: 'text', text: part.text }
   }
 
   // Handle base64 image data
   if (part.data) {
+    // Check if images should be included based on model capability
+    if (!INCLUDE_IMAGES_IN_TOOL_RESPONSES || !modelSupportsVision) {
+      // Convert image to text description instead of sending raw image data
+      const mimeType = part.type === 'image' ? 'image/png' : part.type || 'image/png'
+      const sizeKB = Math.round(part.data.length / 1024)
+      console.log(`[Vision] Image omitted: ${mimeType}, ${sizeKB}KB - model does not support vision (modelSupportsVision=${modelSupportsVision})`)
+      return { 
+        type: 'text', 
+        text: `[Image content (${mimeType}) - ${sizeKB}KB - omitted for non-multimodal model]` 
+      }
+    }
+
     // Assume default image type, though a proper tool should return the mime type
     const mimeType =
       part.type === 'image' ? 'image/png' : part.type || 'image/png'
@@ -42,6 +58,13 @@ const convertToolPartToApiContentPart = (part: ToolResult['content'][0]) => {
 
   // Handle pre-formatted image URL
   if (part.image_url) {
+    if (!INCLUDE_IMAGES_IN_TOOL_RESPONSES || !modelSupportsVision) {
+      console.log(`[Vision] Image URL omitted: ${part.image_url.url.substring(0, 100)}... - model does not support vision (modelSupportsVision=${modelSupportsVision})`)
+      return { 
+        type: 'text', 
+        text: `[Image URL: ${part.image_url.url.substring(0, 100)}... - omitted for non-multimodal model]` 
+      }
+    }
     return { type: 'image_url', image_url: part.image_url }
   }
 
@@ -55,8 +78,12 @@ const convertToolPartToApiContentPart = (part: ToolResult['content'][0]) => {
  */
 export class CompletionMessagesBuilder {
   private messages: ChatCompletionMessageParam[] = []
+  // Track ephemeral tool call IDs so we can replace them
+  private ephemeralToolCallIds: Set<string> = new Set()
+  private modelSupportsVision: boolean = false
 
-  constructor(messages: ThreadMessage[], systemInstruction?: string) {
+  constructor(messages: ThreadMessage[], systemInstruction?: string, modelSupportsVision: boolean = false) {
+    this.modelSupportsVision = modelSupportsVision
     if (systemInstruction) {
       this.messages.push({
         role: 'system',
@@ -166,6 +193,33 @@ export class CompletionMessagesBuilder {
    * @param toolCallId - The ID of the tool call associated with the message.
    */
   addToolMessage(result: string | ToolResult, toolCallId: string) {
+    console.warn('🚨 [EPHEMERAL CHECK] addToolMessage called')
+    console.warn('🚨 [EPHEMERAL CHECK] Result:', JSON.stringify(result, null, 2))
+    
+    // Check for ephemeral flag - check both 'meta' and '_meta' (Tauri serialization may add underscore)
+    const isEphemeral = typeof result !== 'string' && (
+      result.meta?.ephemeral === true || 
+      (result as any)._meta?.ephemeral === true
+    )
+    
+    if (isEphemeral) {
+      console.warn('🚨 [EPHEMERAL] Found ephemeral=true - will replace previous ephemeral messages')
+      
+      // Remove all previous ephemeral tool messages to keep only the latest
+      this.messages = this.messages.filter(msg => {
+        if (msg.role === 'tool' && this.ephemeralToolCallIds.has((msg as any).tool_call_id)) {
+          console.warn('🚨 [EPHEMERAL] Removing previous ephemeral message:', (msg as any).tool_call_id)
+          return false
+        }
+        return true
+      })
+      
+      // Clear the set and add current ID
+      this.ephemeralToolCallIds.clear()
+      this.ephemeralToolCallIds.add(toolCallId)
+      console.warn('🚨 [EPHEMERAL] Adding new ephemeral message:', toolCallId)
+    }
+    
     let content: string | any[] = ''
 
     // Handle simple string case
@@ -179,7 +233,7 @@ export class CompletionMessagesBuilder {
 
       if (hasMultimodalContent) {
         // Build the structured content array
-        content = result.content.map(convertToolPartToApiContentPart)
+        content = result.content.map((part) => convertToolPartToApiContentPart(part, this.modelSupportsVision))
       } else if (result.content?.[0]?.text) {
         // Standard text case
         content = result.content[0].text
