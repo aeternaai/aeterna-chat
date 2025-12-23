@@ -149,6 +149,9 @@ pub fn run() {
             core::folders::commands::update_folder,
             core::folders::commands::delete_folder,
             core::folders::commands::count_folders,
+            // Migration commands
+            core::migration::commands::get_migration_status,
+            core::migration::commands::run_migration,
             // Download
             core::downloads::commands::download_files,
             core::downloads::commands::cancel_download_task,

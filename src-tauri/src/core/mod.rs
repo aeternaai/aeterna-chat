@@ -5,6 +5,7 @@ pub mod extensions;
 pub mod filesystem;
 pub mod folders;
 pub mod mcp;
+pub mod migration;
 pub mod router;
 pub mod server;
 pub mod setup;
