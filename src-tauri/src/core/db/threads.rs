@@ -24,8 +24,12 @@ pub async fn create_thread(thread: Value) -> DbResult<Value> {
     let workspace_id = thread.get("workspace_id")
         .and_then(|v| v.as_str());
     
-    let folder_id = thread.get("folder_id")
-        .and_then(|v| v.as_str());
+    // Extract folder_id from metadata.project.id (where frontend stores it)
+    let folder_id = thread.get("metadata")
+        .and_then(|v| v.get("project"))
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_str())
+        .or_else(|| thread.get("folder_id").and_then(|v| v.as_str()));
     
     let created_at = thread.get("created")
         .and_then(|v| v.as_i64())
@@ -124,8 +128,12 @@ pub async fn update_thread(thread: Value) -> DbResult<()> {
     let workspace_id = thread.get("workspace_id")
         .and_then(|v| v.as_str());
     
-    let folder_id = thread.get("folder_id")
-        .and_then(|v| v.as_str());
+    // Extract folder_id from metadata.project.id (where frontend stores it)
+    let folder_id = thread.get("metadata")
+        .and_then(|v| v.get("project"))
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_str())
+        .or_else(|| thread.get("folder_id").and_then(|v| v.as_str()));
     
     let updated_at = chrono::Utc::now().timestamp();
     

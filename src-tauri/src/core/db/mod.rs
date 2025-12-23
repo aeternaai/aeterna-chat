@@ -12,6 +12,7 @@ pub mod messages;
 pub mod migrations;
 pub mod threads;
 pub mod workspaces;
+pub mod workspace_files;
 
 // Re-export commonly used types
 pub use connection::init_database;
