@@ -1,20 +1,7 @@
-use std::fs::{self, File};
-use std::io::Write;
 use tauri::Runtime;
 use uuid::Uuid;
 
 use crate::core::db;
-use super::helpers::{
-    get_lock_for_thread, read_messages_from_file, should_use_sqlite, update_thread_metadata,
-    write_messages_to_file,
-};
-use super::{
-    constants::THREADS_FILE,
-    utils::{
-        ensure_data_dirs, ensure_thread_dir_exists, get_data_dir, get_messages_path,
-        get_thread_dir, get_thread_metadata_path,
-    },
-};
 
 /// Lists all threads by reading their metadata from the database.
 /// Returns a vector of thread metadata as JSON values.
