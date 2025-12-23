@@ -230,13 +230,14 @@ pub fn run() {
                 app.deep_link().register_all()?;
             }
 
-            // Initialize SQLite database for mobile platforms
-            #[cfg(any(target_os = "android", target_os = "ios"))]
+            // Initialize SQLite database for all platforms
             {
                 let app_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(e) = crate::core::threads::db::init_database(&app_handle).await {
-                        log::error!("Failed to initialize mobile database: {}", e);
+                    if let Err(e) = crate::core::db::init_database(&app_handle).await {
+                        log::error!("Failed to initialize database: {}", e);
+                    } else {
+                        log::info!("Database initialized successfully");
                     }
                 });
             }

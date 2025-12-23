@@ -1,4 +1,5 @@
 pub mod app;
+pub mod db;
 pub mod downloads;
 pub mod extensions;
 pub mod filesystem;
