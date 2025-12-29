@@ -58,6 +58,7 @@ Download from [jan.ai](https://jan.ai/) or [GitHub Releases](https://github.com/
 - **OpenAI-Compatible API**: Local server at `localhost:1337` for other applications
 - **Model Context Protocol**: MCP integration for agentic capabilities
 - **Privacy First**: Everything runs locally when you want it to
+- **SQLite Storage**: Fast, reliable database for conversations, workspaces, and projects (see [DATABASE.md](DATABASE.md))
 
 ## Build from Source
 
@@ -118,6 +119,8 @@ If things go sideways:
 ## Contributing
 
 Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full spiel.
+
+For information on the database architecture and data migration, see [DATABASE.md](DATABASE.md).
 
 ## Links
 

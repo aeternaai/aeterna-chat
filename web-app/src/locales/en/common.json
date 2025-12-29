@@ -378,5 +378,50 @@
       "title": "Thread Removed",
       "description": "Thread removed from \"{{projectName}}\" successfully"
     }
-  }
+  },
+  "workspace": {
+    "title": "Workspaces",
+    "loading": "Loading workspaces...",
+    "empty": "No workspaces yet",
+    "noFiles": "No files in this workspace",
+    "addFile": "Add File",
+    "validateFiles": "Validate Files",
+    "placeholder": {
+      "name": "Workspace name..."
+    },
+    "dialog": {
+      "addFile": {
+        "title": "Add File to Workspace",
+        "description": "Select a file to add as a reference to this workspace. The file will not be copied, only referenced.",
+        "selectFile": "Select File",
+        "changeFile": "Change File",
+        "note": "Note: Only a reference to the file will be stored. The original file must remain accessible."
+      }
+    },
+    "success": {
+      "created": "Workspace created successfully",
+      "updated": "Workspace updated successfully",
+      "deleted": "Workspace deleted successfully",
+      "fileAdded": "File added to workspace",
+      "fileRemoved": "File removed from workspace",
+      "allFilesValid": "All files are valid"
+    },
+    "error": {
+      "nameRequired": "Workspace name is required",
+      "createFailed": "Failed to create workspace",
+      "updateFailed": "Failed to update workspace",
+      "deleteFailed": "Failed to delete workspace",
+      "addFileFailed": "Failed to add file",
+      "removeFileFailed": "Failed to remove file",
+      "selectFileFailed": "Failed to select file",
+      "noFileSelected": "No file selected",
+      "validateFailed": "Failed to validate files"
+    },
+    "warning": {
+      "invalidFiles": "{{count}} file(s) are no longer valid"
+    }
+  },
+  "add": "Add",
+  "adding": "Adding..."
 }
+

@@ -1,36 +1,37 @@
+// NOTE: This file contains legacy file-based operations that are no longer used.
+// All thread and message operations now use the database (see db/threads.rs, db/messages.rs).
+// These functions are kept only for reference during migration but should not be used in new code.
+//
+// To migrate data from files to database, use the migration scripts:
+// - ./migrate_threads.sh
+// - ./test_migration.sh
+//
+// TODO: Remove this file once migration is complete and no dependencies remain.
+
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
 use tauri::Runtime;
 
-// For async file write serialization
-use std::sync::OnceLock;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
 use super::utils::{get_messages_path, get_thread_metadata_path};
 
-// Global per-thread locks for message file writes
-pub static MESSAGE_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
-
-/// Check if the platform should use SQLite (mobile platforms)
+/// DEPRECATED: All platforms now use database exclusively
+/// This function is kept only for compatibility during migration
+#[deprecated(note = "All platforms now use database. This function should not be used.")]
 pub fn should_use_sqlite() -> bool {
-    cfg!(any(target_os = "android", target_os = "ios"))
+    // Return true to indicate database is used everywhere
+    true
 }
 
-/// Get a lock for a specific thread to ensure thread-safe message file operations
-pub async fn get_lock_for_thread(thread_id: &str) -> Arc<Mutex<()>> {
-    let locks = MESSAGE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut locks = locks.lock().await;
-    let lock = locks
-        .entry(thread_id.to_string())
-        .or_insert_with(|| Arc::new(Mutex::new(())))
-        .clone();
-    drop(locks); // Release the map lock before returning the file lock
-    lock
+/// DEPRECATED: Database handles concurrency automatically
+/// This function is kept only for compatibility during migration
+#[deprecated(note = "Database operations don't need per-thread locks")]
+pub async fn get_lock_for_thread(_thread_id: &str) -> () {
+    // No-op: Database handles locking
 }
 
+/// DEPRECATED: Use db::messages::create_message instead
 /// Write messages to a thread's messages.jsonl file
+#[deprecated(note = "Use db::messages::create_message or batch operations")]
 pub fn write_messages_to_file(
     messages: &[serde_json::Value],
     path: &std::path::Path,
@@ -43,7 +44,9 @@ pub fn write_messages_to_file(
     Ok(())
 }
 
+/// DEPRECATED: Use db::messages::list_messages instead
 /// Read messages from a thread's messages.jsonl file
+#[deprecated(note = "Use db::messages::list_messages instead")]
 pub fn read_messages_from_file<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: &str,
@@ -79,7 +82,9 @@ pub fn read_messages_from_file<R: Runtime>(
     Ok(messages)
 }
 
+/// DEPRECATED: Use db::threads::update_thread instead
 /// Update thread metadata by writing to thread.json
+#[deprecated(note = "Use db::threads::update_thread instead")]
 pub fn update_thread_metadata<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     thread_id: &str,

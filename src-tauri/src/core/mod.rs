@@ -1,11 +1,15 @@
 pub mod app;
+pub mod db;
 pub mod downloads;
 pub mod extensions;
 pub mod filesystem;
+pub mod folders;
 pub mod mcp;
+pub mod migration;
 pub mod router;
 pub mod server;
 pub mod setup;
 pub mod state;
 pub mod system;
 pub mod threads;
+pub mod workspaces;

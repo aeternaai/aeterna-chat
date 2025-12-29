@@ -131,6 +131,27 @@ pub fn run() {
             core::threads::commands::get_thread_assistant,
             core::threads::commands::create_thread_assistant,
             core::threads::commands::modify_thread_assistant,
+            // Workspaces
+            core::workspaces::commands::create_workspace,
+            core::workspaces::commands::get_workspace,
+            core::workspaces::commands::list_workspaces,
+            core::workspaces::commands::update_workspace,
+            core::workspaces::commands::delete_workspace,
+            core::workspaces::commands::add_workspace_file,
+            core::workspaces::commands::list_workspace_files,
+            core::workspaces::commands::remove_workspace_file,
+            core::workspaces::commands::update_workspace_file,
+            core::workspaces::commands::validate_workspace_file,
+            // Folder commands
+            core::folders::commands::create_folder,
+            core::folders::commands::get_folder,
+            core::folders::commands::list_folders,
+            core::folders::commands::update_folder,
+            core::folders::commands::delete_folder,
+            core::folders::commands::count_folders,
+            // Migration commands
+            core::migration::commands::get_migration_status,
+            core::migration::commands::run_migration,
             // Download
             core::downloads::commands::download_files,
             core::downloads::commands::cancel_download_task,
@@ -230,13 +251,14 @@ pub fn run() {
                 app.deep_link().register_all()?;
             }
 
-            // Initialize SQLite database for mobile platforms
-            #[cfg(any(target_os = "android", target_os = "ios"))]
+            // Initialize SQLite database for all platforms
             {
                 let app_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(e) = crate::core::threads::db::init_database(&app_handle).await {
-                        log::error!("Failed to initialize mobile database: {}", e);
+                    if let Err(e) = crate::core::db::init_database(&app_handle).await {
+                        log::error!("Failed to initialize database: {}", e);
+                    } else {
+                        log::info!("Database initialized successfully");
                     }
                 });
             }

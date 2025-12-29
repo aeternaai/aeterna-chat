@@ -18,6 +18,7 @@ import {
 } from '@tabler/icons-react'
 import { route } from '@/constants/routes'
 import ThreadList from './ThreadList'
+import { WorkspaceList } from './WorkspaceList'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +44,7 @@ import { useClickOutside } from '@/hooks/useClickOutside'
 import { DeleteAllThreadsDialog } from '@/containers/dialogs'
 import AddProjectDialog from '@/containers/dialogs/AddProjectDialog'
 import { DeleteProjectDialog } from '@/containers/dialogs/DeleteProjectDialog'
+import { AddFileToWorkspaceDialog } from '@/containers/dialogs/AddFileToWorkspace'
 
 const mainMenus = [
   {
@@ -172,6 +174,10 @@ const LeftPanel = () => {
     null
   )
 
+  // Workspace dialog states
+  const [addFileToWorkspaceOpen, setAddFileToWorkspaceOpen] = useState(false)
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('')
+
   const filteredThreads = useMemo(() => {
     return getFilteredThreads(searchTerm)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,6 +223,12 @@ const LeftPanel = () => {
     }
     setProjectDialogOpen(false)
     setEditingProjectKey(null)
+  }
+
+  // Workspace handlers
+  const handleAddFileToWorkspace = (workspaceId: string) => {
+    setSelectedWorkspaceId(workspaceId)
+    setAddFileToWorkspaceOpen(true)
   }
 
   // Disable body scroll when panel is open on small screens
@@ -497,6 +509,11 @@ const LeftPanel = () => {
               </div>
             )}
 
+          {/* Workspace section */}
+          <div className="mb-4 border-b border-left-panel-fg/10 pb-2">
+            <WorkspaceList onAddFile={handleAddFileToWorkspace} />
+          </div>
+
           <div className="flex flex-col h-full overflow-y-scroll w-[calc(100%+6px)]">
             <div className="flex flex-col w-full h-full overflow-y-auto overflow-x-hidden mb-3">
               <div className="h-full w-full overflow-y-auto">
@@ -698,6 +715,13 @@ const LeftPanel = () => {
           />
         </>
       )}
+
+      {/* Workspace Dialogs */}
+      <AddFileToWorkspaceDialog
+        open={addFileToWorkspaceOpen}
+        onOpenChange={setAddFileToWorkspaceOpen}
+        workspaceId={selectedWorkspaceId}
+      />
     </>
   )
 }

@@ -76,7 +76,7 @@ export class DefaultMCPService implements MCPService {
     redirect_uri?: string
   }): Promise<OAuthFlowResult> {
     console.log('startOAuthFlow called with serverName:', serverName, 'oauthConfig:', oauthConfig)
-    return { auth_url: '' }
+    return { authUrl: '' }
   }
 
   async getOAuthStatus(serverName: string): Promise<OAuthStatus> {
