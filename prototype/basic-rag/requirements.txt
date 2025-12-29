@@ -1,0 +1,32 @@
+# Langchain Core
+langchain==1.2.0
+langchain-community==0.4.1
+langchain-core==1.2.5
+langchain-text-splitters==1.1.0
+langchain-openai==1.1.6
+
+# Vector Database
+langchain-qdrant==1.1.0
+qdrant-client==1.16.2
+
+# Embeddings
+langchain-huggingface==1.2.0
+sentence-transformers==5.2.0
+transformers==4.57.3
+torch==2.9.1
+
+# Utilities
+click==8.3.1
+python-dotenv==1.2.1
+huggingface-hub==0.36.0
+pypdf==6.5.0
+python-docx==1.2.0
+pydantic==2.12.5
+pydantic-settings==2.12.0
+
+# HTTP Client for llama.cpp server
+requests==2.32.5
+httpx==0.28.1
+
+# NumPy - Compatible with latest langchain
+numpy==1.26.4
