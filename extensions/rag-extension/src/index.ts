@@ -1,6 +1,9 @@
 import { RAGExtension, MCPTool, MCPToolCallResult, ExtensionTypeEnum, VectorDBExtension, type AttachmentInput, type SettingComponentProps, AIEngine, type AttachmentFileInfo } from '@janhq/core'
 import './env.d'
 import { getRAGTools, RETRIEVE, LIST_ATTACHMENTS, GET_CHUNKS } from './tools'
+import { events } from '@janhq/core'
+import { WorkspaceEvent, type WorkspaceFile } from '@janhq/core'
+import { invoke } from '@tauri-apps/api/core'
 
 export default class RagExtension extends RAGExtension {
   private config = {
@@ -37,6 +40,39 @@ export default class RagExtension extends RAGExtension {
     } catch (e) {
       console.error('[RAG] Failed to check ANN status:', e)
     }
+
+    // Setup workspace file listener
+    this.setupWorkspaceFileListener()
+  }
+
+  private setupWorkspaceFileListener(): void {
+    // Listen for new workspace files added
+    events.on(WorkspaceEvent.OnFileAdded, async (file: WorkspaceFile) => {
+      if (!this.config.enabled) {
+        console.log('[RAG] RAG disabled, skipping file indexing')
+        return
+      }
+
+      console.log('[RAG] Workspace file added, starting indexing:', file.id, file.name)
+
+      try {
+        // Ingest the file directly in the extension
+        // This will handle parsing, chunking, embedding, and storage
+        this.ingestWorkspaceFile(file.workspace_id, file.id, file.file_path).catch((err) => {
+          console.error('[RAG] Error in async workspace file ingestion:', err)
+        })
+      } catch (err) {
+        console.error('[RAG] Failed to start workspace file indexing:', err)
+      }
+    })
+
+    // Listen for workspace file deletions - clean up vector data if needed
+    events.on(WorkspaceEvent.OnFileRemoved, async (data: any) => {
+      console.log('[RAG] Workspace file removed, cleanup requested for:', data.fileId)
+      // Cleanup logic would go here if needed
+    })
+
+    console.log('[RAG] Workspace file listener setup complete')
   }
 
   onUnload(): void {}
@@ -140,7 +176,8 @@ export default class RagExtension extends RAGExtension {
         }
       }
 
-      const results = await vec.searchCollection(
+      // Get results from thread collection
+      const threadResults = await vec.searchCollection(
         threadId,
         queryEmb,
         topK,
@@ -149,10 +186,36 @@ export default class RagExtension extends RAGExtension {
         fileIds
       )
 
+      // Try to also get results from workspace collection if thread belongs to a workspace
+      let workspaceResults: any[] = []
+      try {
+        const thread = await window.core?.api?.getThread?.(threadId)
+        if (thread?.workspace_id) {
+          const workspaceCollectionName = `workspace_${thread.workspace_id}`
+          workspaceResults = await invoke<any[]>('plugin:vector-db|search_collection', {
+            collection: workspaceCollectionName,
+            queryEmbedding: queryEmb,
+            limit: topK,
+            threshold,
+            mode,
+            fileIds,
+          }).catch(() => [])
+        }
+      } catch (err) {
+        console.log('[RAG] Workspace collection search skipped:', err)
+        // Silently skip workspace search if it fails
+      }
+
+      // Merge results: thread collection takes precedence, then workspace
+      const allResults = [
+        ...threadResults,
+        ...workspaceResults.filter((wr) => !threadResults.some((tr) => tr.id === wr.id)),
+      ].slice(0, topK)
+
       const payload = {
         thread_id: threadId,
         query,
-        citations: results?.map((r: any) => ({
+        citations: allResults?.map((r: any) => ({
           id: r.id,
           text: r.text,
           score: r.score,
@@ -302,4 +365,147 @@ export default class RagExtension extends RAGExtension {
     for (const item of data) out[item.index] = item.embedding
     return out
   }
+
+  /// Ingest a workspace file into the workspace collection
+  async ingestWorkspaceFile(workspaceId: string, fileId: string, filePath: string): Promise<void> {
+    try {
+      console.log(`[RAG] Starting ingestion for file ${fileId} in workspace ${workspaceId}`)
+      
+      // Parse document
+      const text = await invoke<string>('plugin:rag|parse_document', {
+        filePath,
+        fileType: this.getMimeTypeFromPath(filePath),
+      })
+
+      if (!text || text.length === 0) {
+        console.error(`[RAG] No text extracted from ${filePath}`)
+        await this.updateFileRagStatus(fileId, 'failed', undefined, undefined, 'No text extracted from document')
+        return
+      }
+
+      console.log(`[RAG] Parsed document, length: ${text.length}`)
+
+      // Chunk text
+      const chunks = await invoke<string[]>('plugin:vector-db|chunk_text', {
+        text,
+        chunkSize: this.config.chunkSizeTokens,
+        chunkOverlap: this.config.overlapTokens,
+      })
+
+      if (!chunks || chunks.length === 0) {
+        console.error(`[RAG] No chunks generated`)
+        await this.updateFileRagStatus(fileId, 'failed', undefined, undefined, 'No chunks generated')
+        return
+      }
+
+      console.log(`[RAG] Created ${chunks.length} chunks`)
+
+      // Get embeddings
+      const embeddings = await this.embedTexts(chunks)
+
+      if (!embeddings || embeddings.length === 0 || embeddings[0].length === 0) {
+        console.error(`[RAG] Failed to generate embeddings`)
+        await this.updateFileRagStatus(fileId, 'failed', undefined, undefined, 'Failed to generate embeddings')
+        return
+      }
+
+      const dimension = embeddings[0].length
+
+      // Create workspace collection
+      const collectionName = `workspace_${workspaceId}`
+      await invoke('plugin:vector-db|create_collection', {
+        name: collectionName,
+        dimension,
+      })
+
+      // Create file entry
+      const fileInfo = await invoke('plugin:vector-db|create_file', {
+        collection: collectionName,
+        file: {
+          path: filePath,
+          name: filePath.split(/[\\/]/).pop(),
+          type: this.getMimeTypeFromPath(filePath),
+        },
+      })
+
+      // Insert chunks in batches with progress events
+      const chunkInputs = chunks.map((text, i) => ({
+        text,
+        embedding: embeddings[i],
+      }))
+
+      const totalChunks = chunkInputs.length
+      const batchSize = 10 // Insert in batches of 10 chunks
+
+      for (let i = 0; i < chunkInputs.length; i += batchSize) {
+        const batch = chunkInputs.slice(i, Math.min(i + batchSize, chunkInputs.length))
+
+        await invoke('plugin:vector-db|insert_chunks', {
+          collection: collectionName,
+          fileId: (fileInfo as any).id,
+          chunks: batch,
+        })
+
+        // Emit progress every batch
+        const processed = Math.min(i + batchSize, totalChunks)
+        const percent = (processed / totalChunks) * 100
+        window.core?.api?.emitEvent?.('workspace-file-indexing-progress', {
+          file_id: fileId,
+          percent,
+          processed,
+          total: totalChunks,
+        })
+      }
+
+      // Update file status to indexed
+      const now = Math.floor(Date.now() / 1000)
+      await this.updateFileRagStatus(fileId, 'indexed', totalChunks, now, undefined)
+
+      console.log(`[RAG] Successfully indexed workspace file ${fileId}: ${totalChunks} chunks`)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      console.error('[RAG] Ingest error details:', errorMsg, err)
+      await this.updateFileRagStatus(fileId, 'failed', undefined, undefined, errorMsg)
+    }
+  }
+
+  private async updateFileRagStatus(
+    fileId: string,
+    status: string,
+    chunks?: number,
+    indexedAt?: number,
+    error?: string
+  ): Promise<void> {
+    try {
+      await invoke('update_workspace_file_rag_status', {
+        fileId,
+        status,
+        chunks,
+        indexedAt,
+        error,
+      })
+    } catch (err) {
+      console.error('[RAG] Failed to update file RAG status:', err)
+    }
+  }
+
+  private getMimeTypeFromPath(filePath: string): string {
+    const ext = filePath.toLowerCase().split('.').pop() || ''
+    const mimeMap: Record<string, string> = {
+      'pdf': 'application/pdf',
+      'txt': 'text/plain',
+      'md': 'text/markdown',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'doc': 'application/msword',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'xls': 'application/vnd.ms-excel',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'html': 'text/html',
+      'htm': 'text/html',
+    }
+    return mimeMap[ext] || 'application/octet-stream'
+  }
 }
+
+export default RagExtension

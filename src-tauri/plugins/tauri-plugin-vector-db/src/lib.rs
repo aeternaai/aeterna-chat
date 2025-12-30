@@ -27,6 +27,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::get_status,
             commands::list_attachments,
             commands::get_chunks,
+            commands::create_workspace_collection,
+            commands::delete_workspace_collection,
         ])
         .setup(|app, _api| {
             app.manage(state::VectorDBState::new());

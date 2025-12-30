@@ -287,3 +287,8 @@ vi.mock('@tauri-apps/api/core', () => ({
 4. **Test across platforms**: Desktop (macOS/Linux/Windows) and mobile if applicable
 5. **Update types**: Add to `core/src/types` if new data structures
 6. **Document Tauri commands**: They're the contract between frontend/backend
+
+## Documentation & Communication
+- **Do NOT create markdown files** to document changes or summarize work unless explicitly requested by the user
+- Provide updates directly in conversation text instead
+- Only create new documentation files when specifically asked or when essential to the task itself

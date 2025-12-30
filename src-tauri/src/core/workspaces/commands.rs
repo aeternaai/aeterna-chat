@@ -1,7 +1,8 @@
 use crate::core::db;
 use serde_json::Value;
-use tauri::Runtime;
+use tauri::{Runtime, Manager, Emitter};
 use uuid::Uuid;
+use tokio_util::sync::CancellationToken;
 
 /// Creates a new workspace in the database
 #[tauri::command]
@@ -62,7 +63,7 @@ pub async fn update_workspace<R: Runtime>(
 /// Deletes a workspace and all its related data (CASCADE)
 #[tauri::command]
 pub async fn delete_workspace<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
+    _app_handle: tauri::AppHandle<R>,
     workspace_id: String,
 ) -> Result<(), String> {
     db::workspaces::delete_workspace(&workspace_id).await
@@ -191,3 +192,198 @@ pub async fn validate_workspace_file<R: Runtime>(
     
     Ok(status)
 }
+
+// ============================================================================
+// Workspace File RAG Commands
+// ============================================================================
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct WorkspaceFileRagStatus {
+    pub file_id: String,
+    pub status: String,
+    pub chunks: i64,
+    pub indexed_at: Option<i64>,
+    pub error: Option<String>,
+}
+
+/// Update RAG status for a workspace file
+#[tauri::command]
+pub async fn update_workspace_file_rag_status<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    file_id: String,
+    status: String,
+    chunks: Option<i64>,
+    indexed_at: Option<i64>,
+    error: Option<String>,
+) -> Result<(), String> {
+    db::workspace_files::update_rag_status(
+        &file_id,
+        &status,
+        chunks,
+        indexed_at,
+        error.as_deref(),
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Get RAG status for a workspace file
+#[tauri::command]
+pub async fn get_workspace_file_rag_status<R: Runtime>(
+    _app: tauri::AppHandle<R>,
+    file_id: String,
+) -> Result<Option<WorkspaceFileRagStatus>, String> {
+    let status = db::workspace_files::get_rag_status(&file_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(status.map(|(status, chunks, indexed_at, error)| {
+        WorkspaceFileRagStatus {
+            file_id,
+            status,
+            chunks,
+            indexed_at,
+            error,
+        }
+    }))
+}
+
+/// Ingest a workspace file into the vector database with background processing
+/// This command spawns a background task that will emit progress events via the app handle
+#[tauri::command]
+pub async fn ingest_workspace_file<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    workspace_id: String,
+    file_id: String,
+    file_path: String,
+) -> Result<(), String> {
+    // Clone app_handle and get state first
+    let app_clone = app_handle.clone();
+    let app_for_state = app_handle.clone();
+    let state = app_handle.state::<crate::core::state::AppState>();
+    
+    // Store the cancellation token for this file
+    let cancel_token = CancellationToken::new();
+    state
+        .workspace_indexing_tokens
+        .lock()
+        .await
+        .insert(file_id.clone(), cancel_token.clone());
+    
+    // Clone values for the background task
+    let _workspace_id_clone = workspace_id.clone();
+    let file_id_clone = file_id.clone();
+    let _file_path_clone = file_path.clone();
+    
+    // Spawn background task for processing
+    // This will emit events that the frontend listens to
+    tokio::spawn(async move {
+        // Update status to processing
+        let _ = db::workspace_files::update_rag_status(&file_id_clone, "processing", None, None, None).await;
+        
+        // Emit event that indexing has started
+        let _ = app_clone.emit("workspace-file-indexing-start", serde_json::json!({
+            "file_id": file_id_clone,
+        }));
+        
+        // The actual processing will be handled by the RAG extension
+        // which will emit progress events and update the status
+        // For now, just clean up and wait for the extension to complete
+        let start_time = std::time::Instant::now();
+        let timeout_duration = std::time::Duration::from_secs(300); // 5 minute timeout
+        
+        // Wait for indexing to complete (extension will update the status)
+        // This is a placeholder - the extension will handle the actual work
+        loop {
+            if cancel_token.is_cancelled() {
+                let _ = db::workspace_files::update_rag_status(
+                    &file_id_clone,
+                    "failed",
+                    None,
+                    None,
+                    Some("Cancelled by user"),
+                )
+                .await;
+                
+                let _ = app_clone.emit("workspace-file-indexing-cancelled", serde_json::json!({
+                    "file_id": file_id_clone,
+                }));
+                break;
+            }
+            
+            // Check if status has been updated by the extension
+            if let Ok(Some((status, _, _, _))) = db::workspace_files::get_rag_status(&file_id_clone).await {
+                if status == "indexed" || status == "failed" {
+                    break;
+                }
+            }
+            
+            // Check timeout
+            if start_time.elapsed() > timeout_duration {
+                let _ = db::workspace_files::update_rag_status(
+                    &file_id_clone,
+                    "failed",
+                    None,
+                    None,
+                    Some("Indexing timeout"),
+                )
+                .await;
+                break;
+            }
+            
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+        
+        // Clean up cancellation token
+        app_for_state
+            .state::<crate::core::state::AppState>()
+            .workspace_indexing_tokens
+            .lock()
+            .await
+            .remove(&file_id_clone);
+    });
+    
+    Ok(())
+}
+
+/// Cancel an in-progress workspace file indexing operation
+#[tauri::command]
+pub async fn cancel_workspace_file_indexing<R: Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    file_id: String,
+) -> Result<(), String> {
+    let state = app_handle.state::<crate::core::state::AppState>();
+    
+    let token = {
+        state
+            .workspace_indexing_tokens
+            .lock()
+            .await
+            .remove(&file_id)
+    };
+    
+    if let Some(token) = token {
+        token.cancel();
+        
+        // Update file status to failed with cancellation message
+        let _ = db::workspace_files::update_rag_status(
+            &file_id,
+            "failed",
+            None,
+            None,
+            Some("Cancelled by user"),
+        )
+        .await;
+        
+        // Emit cancellation event
+        let _ = app_handle.emit("workspace-file-indexing-cancelled", serde_json::json!({
+            "file_id": file_id,
+        }));
+        
+        Ok(())
+    } else {
+        Err(format!("No indexing operation found for file {}", file_id))
+    }
+}
+
+

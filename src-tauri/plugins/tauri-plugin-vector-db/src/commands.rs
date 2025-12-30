@@ -204,3 +204,45 @@ pub async fn get_chunks<R: tauri::Runtime>(
     let conn = db::open_or_init_conn(&path)?;
     db::get_chunks(&conn, file_id, start_order, end_order)
 }
+
+// ============================================================================
+// Workspace Collection Commands
+// ============================================================================
+
+/// Create a workspace-scoped vector collection
+#[tauri::command]
+pub async fn create_workspace_collection<R: tauri::Runtime>(
+    _app: tauri::AppHandle<R>,
+    state: State<'_, VectorDBState>,
+    workspace_id: String,
+    dimension: usize,
+) -> Result<(), VectorDBError> {
+    let collection_name = format!("workspace_{}", workspace_id);
+    let path = db::collection_path(&state.base_dir, &collection_name);
+    let conn = db::open_or_init_conn(&path)?;
+
+    let has_ann = db::create_schema(&conn, dimension)?;
+    if has_ann {
+        println!("[VectorDB] ✓ Workspace collection '{}' created with ANN support", collection_name);
+    } else {
+        println!("[VectorDB] ⚠ Workspace collection '{}' created WITHOUT ANN support", collection_name);
+    }
+    Ok(())
+}
+
+/// Delete a workspace-scoped vector collection
+#[tauri::command]
+pub async fn delete_workspace_collection<R: tauri::Runtime>(
+    _app: tauri::AppHandle<R>,
+    state: State<'_, VectorDBState>,
+    workspace_id: String,
+) -> Result<(), VectorDBError> {
+    let collection_name = format!("workspace_{}", workspace_id);
+    let path = db::collection_path(&state.base_dir, &collection_name);
+    if path.exists() {
+        std::fs::remove_file(path)
+            .map_err(|e| VectorDBError::IoError(format!("Failed to delete workspace collection: {}", e)))?;
+        println!("[VectorDB] ✓ Deleted workspace collection: {}", collection_name);
+    }
+    Ok(())
+}

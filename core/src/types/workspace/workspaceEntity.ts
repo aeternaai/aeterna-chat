@@ -54,6 +54,14 @@ export type WorkspaceFile = {
   metadata?: Record<string, unknown>
   /** Represents whether the file still exists at the original path. */
   is_valid?: boolean
+  /** Represents the RAG indexing status (pending/processing/indexed/failed). */
+  rag_status?: 'pending' | 'processing' | 'indexed' | 'failed'
+  /** Represents the number of chunks created during indexing. */
+  rag_chunks?: number
+  /** Represents when the file was indexed. */
+  rag_indexed_at?: number
+  /** Represents the error message if indexing failed. */
+  rag_error?: string
 }
 
 /**
