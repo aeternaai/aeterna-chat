@@ -69,14 +69,14 @@ export default class JanWorkspaceExtension extends WorkspaceExtension {
 
   async addFileToWorkspace(file: WorkspaceFile): Promise<void> {
     // Call Tauri command to add file to workspace in database
-    await invoke('add_workspace_file', {
+    const createdFile = await invoke<WorkspaceFile>('add_workspace_file', {
       workspaceId: file.workspace_id,
       filePath: file.file_path,
       name: file.name,
     })
     
-    // Emit event
-    events.emit(WorkspaceEvent.OnFileAdded, file)
+    // Emit event with the actual created file record (includes generated id and rag_status='pending')
+    events.emit(WorkspaceEvent.OnFileAdded, createdFile)
   }
 
   async removeFileFromWorkspace(fileId: string): Promise<void> {

@@ -48,12 +48,16 @@ pub async fn add_file(workspace_id: &str, file: &Value) -> DbResult<Value> {
         .unwrap_or("ready");
     
     let metadata = serde_json::to_string(&file)?;
+    
+    let rag_status = file.get("rag_status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("pending");
 
     sqlx::query(
         r#"
         INSERT INTO workspace_files 
-        (id, workspace_id, file_path, name, extension, size, added_at, updated_at, is_valid, status, metadata)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        (id, workspace_id, file_path, name, extension, size, added_at, updated_at, is_valid, status, metadata, rag_status)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
         "#,
     )
     .bind(id)
@@ -67,6 +71,7 @@ pub async fn add_file(workspace_id: &str, file: &Value) -> DbResult<Value> {
     .bind(is_valid)
     .bind(status)
     .bind(&metadata)
+    .bind(rag_status)
     .execute(pool)
     .await?;
 

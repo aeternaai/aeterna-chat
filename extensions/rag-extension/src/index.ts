@@ -15,6 +15,8 @@ export default class RagExtension extends RAGExtension {
     searchMode: 'auto' as 'auto' | 'ann' | 'linear',
     maxFileSizeMB: 20,
   }
+  private workspaceFileListenerSetup = false
+  private ingestionInProgress = new Set<string>() // Track in-progress ingestions by fileId
 
   async onLoad(): Promise<void> {
     const settings = structuredClone(SETTINGS) as SettingComponentProps[]
@@ -41,8 +43,11 @@ export default class RagExtension extends RAGExtension {
       console.error('[RAG] Failed to check ANN status:', e)
     }
 
-    // Setup workspace file listener
-    this.setupWorkspaceFileListener()
+    // Setup workspace file listener (only once)
+    if (!this.workspaceFileListenerSetup) {
+      this.setupWorkspaceFileListener()
+      this.workspaceFileListenerSetup = true
+    }
   }
 
   private setupWorkspaceFileListener(): void {
@@ -53,16 +58,29 @@ export default class RagExtension extends RAGExtension {
         return
       }
 
+      // Skip if already ingesting this file
+      if (this.ingestionInProgress.has(file.id)) {
+        console.log('[RAG] Ingestion already in progress for file:', file.id)
+        return
+      }
+
       console.log('[RAG] Workspace file added, starting indexing:', file.id, file.name)
+
+      // Mark as in-progress
+      this.ingestionInProgress.add(file.id)
 
       try {
         // Ingest the file directly in the extension
         // This will handle parsing, chunking, embedding, and storage
         this.ingestWorkspaceFile(file.workspace_id, file.id, file.file_path).catch((err) => {
           console.error('[RAG] Error in async workspace file ingestion:', err)
+        }).finally(() => {
+          // Mark as complete
+          this.ingestionInProgress.delete(file.id)
         })
       } catch (err) {
         console.error('[RAG] Failed to start workspace file indexing:', err)
+        this.ingestionInProgress.delete(file.id)
       }
     })
 
@@ -372,6 +390,7 @@ export default class RagExtension extends RAGExtension {
       console.log(`[RAG] Starting ingestion for file ${fileId} in workspace ${workspaceId}`)
       
       // Parse document
+      console.log(`[RAG] Parsing document at: ${filePath}`)
       const text = await invoke<string>('plugin:rag|parse_document', {
         filePath,
         fileType: this.getMimeTypeFromPath(filePath),
@@ -379,13 +398,13 @@ export default class RagExtension extends RAGExtension {
 
       if (!text || text.length === 0) {
         console.error(`[RAG] No text extracted from ${filePath}`)
-        await this.updateFileRagStatus(fileId, 'failed', undefined, undefined, 'No text extracted from document')
         return
       }
 
       console.log(`[RAG] Parsed document, length: ${text.length}`)
 
       // Chunk text
+      console.log(`[RAG] Chunking text with size=${this.config.chunkSizeTokens}, overlap=${this.config.overlapTokens}`)
       const chunks = await invoke<string[]>('plugin:vector-db|chunk_text', {
         text,
         chunkSize: this.config.chunkSizeTokens,
@@ -394,31 +413,33 @@ export default class RagExtension extends RAGExtension {
 
       if (!chunks || chunks.length === 0) {
         console.error(`[RAG] No chunks generated`)
-        await this.updateFileRagStatus(fileId, 'failed', undefined, undefined, 'No chunks generated')
         return
       }
 
       console.log(`[RAG] Created ${chunks.length} chunks`)
 
       // Get embeddings
+      console.log(`[RAG] Generating embeddings for ${chunks.length} chunks`)
       const embeddings = await this.embedTexts(chunks)
 
       if (!embeddings || embeddings.length === 0 || embeddings[0].length === 0) {
         console.error(`[RAG] Failed to generate embeddings`)
-        await this.updateFileRagStatus(fileId, 'failed', undefined, undefined, 'Failed to generate embeddings')
         return
       }
 
       const dimension = embeddings[0].length
+      console.log(`[RAG] Generated embeddings with dimension: ${dimension}`)
 
       // Create workspace collection
       const collectionName = `workspace_${workspaceId}`
+      console.log(`[RAG] Creating collection: ${collectionName}`)
       await invoke('plugin:vector-db|create_collection', {
         name: collectionName,
         dimension,
       })
 
       // Create file entry
+      console.log(`[RAG] Creating file entry in collection`)
       const fileInfo = await invoke('plugin:vector-db|create_file', {
         collection: collectionName,
         file: {
@@ -436,9 +457,11 @@ export default class RagExtension extends RAGExtension {
 
       const totalChunks = chunkInputs.length
       const batchSize = 10 // Insert in batches of 10 chunks
+      console.log(`[RAG] Inserting ${totalChunks} chunks into collection in batches of ${batchSize}`)
 
       for (let i = 0; i < chunkInputs.length; i += batchSize) {
         const batch = chunkInputs.slice(i, Math.min(i + batchSize, chunkInputs.length))
+        console.log(`[RAG] Inserting batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(totalChunks / batchSize)}`)
 
         await invoke('plugin:vector-db|insert_chunks', {
           collection: collectionName,
@@ -458,6 +481,7 @@ export default class RagExtension extends RAGExtension {
       }
 
       // Update file status to indexed
+      console.log(`[RAG] All chunks inserted, updating file status to indexed`)
       const now = Math.floor(Date.now() / 1000)
       await this.updateFileRagStatus(fileId, 'indexed', totalChunks, now, undefined)
 
@@ -486,6 +510,7 @@ export default class RagExtension extends RAGExtension {
       })
     } catch (err) {
       console.error('[RAG] Failed to update file RAG status:', err)
+      throw err // Rethrow so caller can handle it properly
     }
   }
 

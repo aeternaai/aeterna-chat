@@ -111,7 +111,8 @@ pub async fn add_workspace_file<R: Runtime>(
         "added_at": now,
         "updated_at": now,
         "is_valid": true,
-        "status": "ready"
+        "status": "ready",
+        "rag_status": "pending"
     });
     
     // Insert into database (this would need a new db function)
