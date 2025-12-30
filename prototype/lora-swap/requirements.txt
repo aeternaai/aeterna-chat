@@ -1,0 +1,34 @@
+# LoRA Hot-Swap Prototype Dependencies
+
+# HTTP client for llama-server API
+requests>=2.31.0
+
+# Process management
+psutil>=5.9.0
+
+# Performance monitoring
+memory-profiler>=0.61.0
+
+# CLI argument parsing
+click>=8.1.0
+
+# HuggingFace Hub for model/adapter downloads
+huggingface_hub>=0.21.0
+
+# YAML configuration
+pyyaml>=6.0
+
+# JSON schema validation
+jsonschema>=4.19.0
+
+# Progress bars
+tqdm>=4.66.0
+
+# Terminal colors
+colorama>=0.4.6
+
+# Time formatting
+humanize>=4.9.0
+
+# Logging
+rich>=13.7.0

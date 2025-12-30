@@ -1,0 +1,8 @@
+# Adapter-specific test prompts
+# These should show different behavior with LoRA adapters active
+
+Write code to sort an array in Python.
+Explain object-oriented programming.
+What is a neural network?
+Describe machine learning algorithms.
+Compare supervised and unsupervised learning.

@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Results
+results/*.json
+results/*.log
+results/*.txt
+!results/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+*.prof
+*.lprof
+memory_profiler_*.dat
