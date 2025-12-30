@@ -1,0 +1,8 @@
+# Baseline test prompts (without LoRA adapters)
+# Used to establish baseline model behavior
+
+What is the capital of France?
+Explain quantum computing in simple terms.
+Write a haiku about programming.
+What are the three laws of thermodynamics?
+Describe the water cycle.
