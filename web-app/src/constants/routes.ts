@@ -20,6 +20,7 @@ export const route = {
     hardware: '/settings/hardware',
     router: '/settings/router',
     assistant: '/settings/assistant',
+    langchain_rag: '/settings/langchain-rag',
   },
   hub: {
     index: '/hub/',

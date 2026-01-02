@@ -1,0 +1,58 @@
+[
+  {
+    "key": "enabled",
+    "titleKey": "settings:langchainRag.enable",
+    "descriptionKey": "settings:langchainRag.enableDesc",
+    "controllerType": "checkbox",
+    "controllerProps": { "value": true }
+  },
+  {
+    "key": "llm_server_url",
+    "titleKey": "settings:langchainRag.llmServerUrl",
+    "descriptionKey": "settings:langchainRag.llmServerUrlDesc",
+    "controllerType": "input",
+    "controllerProps": { "value": "http://127.0.0.1:8080/v1", "type": "text" }
+  },
+  {
+    "key": "embeddings_model",
+    "titleKey": "settings:langchainRag.embeddingsModel",
+    "descriptionKey": "settings:langchainRag.embeddingsModelDesc",
+    "controllerType": "input",
+    "controllerProps": { "value": "sentence-transformers/all-MiniLM-L6-v2", "type": "text" }
+  },
+  {
+    "key": "retrieval_limit",
+    "titleKey": "settings:langchainRag.topK",
+    "descriptionKey": "settings:langchainRag.topKDesc",
+    "controllerType": "input",
+    "controllerProps": { "value": 3, "type": "number", "min": 1, "max": 20, "step": 1, "textAlign": "right" }
+  },
+  {
+    "key": "chunk_size",
+    "titleKey": "settings:langchainRag.chunkSize",
+    "descriptionKey": "settings:langchainRag.chunkSizeDesc",
+    "controllerType": "input",
+    "controllerProps": { "value": 512, "type": "number", "min": 64, "max": 8192, "step": 64, "textAlign": "right" }
+  },
+  {
+    "key": "chunk_overlap",
+    "titleKey": "settings:langchainRag.chunkOverlap",
+    "descriptionKey": "settings:langchainRag.chunkOverlapDesc",
+    "controllerType": "input",
+    "controllerProps": { "value": 64, "type": "number", "min": 0, "max": 1024, "step": 16, "textAlign": "right" }
+  },
+  {
+    "key": "llm_temperature",
+    "titleKey": "settings:langchainRag.temperature",
+    "descriptionKey": "settings:langchainRag.temperatureDesc",
+    "controllerType": "input",
+    "controllerProps": { "value": 0.7, "type": "number", "min": 0, "max": 2, "step": 0.1, "textAlign": "right" }
+  },
+  {
+    "key": "llm_max_tokens",
+    "titleKey": "settings:langchainRag.maxTokens",
+    "descriptionKey": "settings:langchainRag.maxTokensDesc",
+    "controllerType": "input",
+    "controllerProps": { "value": 1024, "type": "number", "min": 128, "max": 4096, "step": 128, "textAlign": "right" }
+  }
+]

@@ -25,7 +25,8 @@ import {
   ChatCompletionMessageToolCall,
   CompletionUsage,
 } from 'openai/resources'
-import { MessageStatus, ContentType, ThreadMessage } from '@janhq/core'
+import { MessageStatus, ContentType, ThreadMessage, ExtensionTypeEnum, type RAGExtension } from '@janhq/core'
+import { ExtensionManager } from '@/lib/extension'
 import { useAttachments } from '@/hooks/useAttachments'
 import { PlatformFeatures } from '@/lib/platform/const'
 import { PlatformFeature } from '@/lib/platform/types'
@@ -1035,29 +1036,61 @@ export const useChat = () => {
               .tools.filter((tool) => !isToolDisabled(tool))
           : []
 
-        // Conditionally inject RAG if tools are supported and documents are attached
+        console.log('[useChat] ====== TOOLS INJECTION FLOW ======')
+        console.log('[useChat] Model supports tools:', selectedModel?.capabilities?.includes('tools'))
+        console.log('[useChat] Initial availableTools count:', availableTools.length)
+        console.log('[useChat] Initial tools:', availableTools.map(t => `${t.server}::${t.name}`))
+
+        // Always inject LangChain RAG tools for workspace document retrieval
+        // Workspace files are indexed to Qdrant and available for retrieval
         const ragFeatureAvailable =
           useAttachments.getState().enabled &&
           PlatformFeatures[PlatformFeature.FILE_ATTACHMENTS]
-        // Check if documents were attached in the current thread
-        const hasDocuments = useThreads
-          .getState()
-          .getThreadById(activeThread.id)?.metadata?.hasDocuments
-        if (hasDocuments && ragFeatureAvailable) {
+        
+        console.log('[useChat] RAG feature available:', ragFeatureAvailable)
+        
+        if (ragFeatureAvailable) {
           try {
-            const ragTools = await serviceHub
-              .rag()
-              .getTools()
-              .catch(() => [])
-            if (Array.isArray(ragTools) && ragTools.length) {
-              const enabledRagTools = ragTools.filter(
-                (tool) => !isToolDisabled(tool)
-              )
-              availableTools = [...availableTools, ...enabledRagTools]
-              console.log('RAG tools injected for completion.')
+            console.log('[useChat] Attempting to inject LangChain RAG tools for workspace retrieval')
+            
+            // Use LangChain RAG for workspace document retrieval
+            const langchainExt = ExtensionManager.getInstance().get<RAGExtension>(ExtensionTypeEnum.LangChainRAG)
+            console.log('[useChat] LangChain extension found:', !!langchainExt)
+            
+            if (langchainExt) {
+              console.log('[useChat] Calling getTools() on LangChain extension...')
+              const ragTools = (await langchainExt?.getTools?.().catch((err) => {
+                console.error('[useChat] Error calling getTools():', err)
+                return []
+              })) || []
+              
+              console.log('[useChat] getTools() returned:', ragTools.length, 'tools')
+              console.log('[useChat] ragTools type:', typeof ragTools)
+              console.log('[useChat] ragTools is array:', Array.isArray(ragTools))
+              console.log('[useChat] ragTools value:', ragTools)
+              if (ragTools.length > 0) {
+                ragTools.forEach(tool => console.log('[useChat]   - Tool name:', tool?.name, 'server:', tool?.server))
+              }
+              
+              if (Array.isArray(ragTools) && ragTools.length) {
+                const enabledRagTools = ragTools.filter(
+                  (tool) => !isToolDisabled(tool)
+                )
+                console.log('[useChat] After filtering disabled tools:', enabledRagTools.length, 'tools')
+                enabledRagTools.forEach(tool => console.log('[useChat]   ✓ Enabled tool:', tool.name))
+                
+                availableTools = [...availableTools, ...enabledRagTools]
+                console.log('[useChat] Total availableTools after injection:', availableTools.length)
+                console.log('[useChat] All tools after injection:', availableTools.map(t => `${t.server}::${t.name}`))
+                console.log('[useChat] ✓ LangChain RAG tools successfully injected')
+              } else {
+                console.warn('[useChat] getTools() returned empty array')
+              }
+            } else {
+              console.warn('[useChat] LangChain RAG extension not available')
             }
           } catch (e) {
-            console.warn('Failed to inject RAG tools:', e)
+            console.warn('[useChat] Failed to inject LangChain RAG tools:', e)
           }
         }
 
@@ -1134,6 +1167,13 @@ export const useChat = () => {
               ...(currentAssistant?.parameters || {}),
             } as unknown as Record<string, object>
           )
+
+          console.log('[useChat] ====== COMPLETION REQUEST SENT ======')
+          console.log('[useChat] Tools sent to LLM:', availableTools.length)
+          availableTools.forEach(tool => {
+            console.log(`[useChat]   - ${tool.server}::${tool.name}`)
+          })
+          console.log('[useChat] Completion response received')
 
           if (!completion) throw new Error('No completion received')
           const currentCall: ChatCompletionMessageToolCall | null = null

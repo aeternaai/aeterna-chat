@@ -6,7 +6,6 @@
   "https_proxy": "HTTPS Proxy",
   "extensions": "Extensions",
   "attachments": "Attachments",
-  "langchainRag": "LangChain RAG",
   "general": "General",
   "router": "Router",
   "settings": "Settings",
@@ -425,3 +424,4 @@
   "add": "Add",
   "adding": "Adding..."
 }
+

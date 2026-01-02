@@ -86,12 +86,18 @@ class LangChainService:
             "top_k": 3,
             "score_threshold": 0.0,
             "qdrant_path": None,  # Set during initialization
+            "llm_server_url": "http://127.0.0.1:8080/v1",  # llama.cpp server
+            "llm_api_key": "not-needed",
+            "llm_max_tokens": 1024,
+            "llm_temperature": 0.7,
+            "llm_timeout": 600,
         }
         
         # Components (initialized lazily)
         self.embeddings = None
         self.qdrant_client = None
         self.text_splitter = None
+        self.llm = None
         
         logger.info(f"LangChain Service v{self.version} created")
     
@@ -138,6 +144,23 @@ class LangChainService:
                 length_function=len,
                 separators=["\n\n", "\n", " ", ""],
             )
+            
+            # Initialize LLM connection (optional - only if server URL provided)
+            if self.config.get("llm_server_url"):
+                logger.info(f"Initializing LLM connection: {self.config['llm_server_url']}")
+                try:
+                    from langchain_openai import ChatOpenAI
+                    self.llm = ChatOpenAI(
+                        base_url=self.config["llm_server_url"],
+                        api_key=self.config["llm_api_key"],
+                        model="gpt-3.5-turbo",  # Ignored by llama.cpp
+                        max_tokens=self.config["llm_max_tokens"],
+                        temperature=self.config["llm_temperature"],
+                        timeout=self.config["llm_timeout"],
+                    )
+                    logger.info("LLM connection initialized")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize LLM: {e}. Query will return context only.")
             
             self.initialized = True
             logger.info("Service initialized successfully")
@@ -256,6 +279,7 @@ class LangChainService:
             Ingestion results with chunk count and document IDs
         """
         self._ensure_initialized()
+        start_time = time.time()
         
         file_path = params.get("file_path")
         collection = params.get("collection", "default")
@@ -315,13 +339,15 @@ class LangChainService:
         # Add documents and get IDs
         doc_ids = vectorstore.add_documents(chunks)
         
-        logger.info(f"Ingestion complete: {len(doc_ids)} chunks stored")
+        processing_time_ms = int((time.time() - start_time) * 1000)
+        logger.info(f"Ingestion complete: {len(doc_ids)} chunks stored in {processing_time_ms}ms")
         
         return {
             "collection": collection,
+            "file_name": file_name,
             "chunks_count": len(chunks),
-            "document_ids": doc_ids,
-            "source_file": file_name,
+            "doc_ids": doc_ids,
+            "processing_time_ms": processing_time_ms,
         }
     
     def query(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -335,6 +361,7 @@ class LangChainService:
                 - k: Number of documents to retrieve
                 - score_threshold: Minimum similarity score
                 - filter: Optional metadata filter
+                - stream: Whether to stream the response (default: false)
         
         Returns:
             Query results with answer and source documents
@@ -346,20 +373,31 @@ class LangChainService:
         k = params.get("k", self.config["top_k"])
         score_threshold = params.get("score_threshold", self.config["score_threshold"])
         filter_dict = params.get("filter")
+        stream = params.get("stream", False)
         
         if not query_text:
             raise ValueError("query is required")
         
-        logger.info(f"Query: '{query_text[:50]}...' in collection: {collection}")
+        logger.info(f"=== QUERY START ===")
+        logger.info(f"Query text: '{query_text}'")
+        logger.info(f"Collection: '{collection}'")
+        logger.info(f"Retrieval count (k): {k}")
+        logger.info(f"Score threshold: {score_threshold}")
+        logger.info(f"Filter: {filter_dict}")
         
         # Check if collection exists
         collections = [c.name for c in self.qdrant_client.get_collections().collections]
+        logger.info(f"Available collections: {collections}")
+        
         if collection not in collections:
+            logger.warning(f"Collection '{collection}' not found")
             return {
                 "answer": f"Collection '{collection}' not found. Please ingest documents first.",
                 "sources": [],
                 "num_sources": 0,
             }
+        
+        logger.info(f"Collection '{collection}' found")
         
         # Create vectorstore for retrieval
         vectorstore = Qdrant(
@@ -368,6 +406,8 @@ class LangChainService:
             embeddings=self.embeddings,
         )
         
+        logger.info(f"Performing similarity search...")
+        
         # Perform similarity search
         results = vectorstore.similarity_search_with_score(
             query_text,
@@ -375,11 +415,17 @@ class LangChainService:
             filter=filter_dict,
         )
         
+        logger.info(f"Similarity search returned {len(results)} results")
+        logger.info(f"Raw results scores: {[score for _, score in results]}")
+        
         # Filter by score threshold
         filtered_results = [
             (doc, score) for doc, score in results
             if score >= score_threshold
         ]
+        
+        logger.info(f"After threshold filter ({score_threshold}): {len(filtered_results)} results")
+        logger.info(f"Filtered scores: {[score for _, score in filtered_results]}")
         
         logger.info(f"Retrieved {len(filtered_results)} relevant documents")
         
@@ -395,23 +441,69 @@ class LangChainService:
             }
             sources.append(source)
             context_parts.append(doc.page_content)
+            logger.info(f"Source score: {score}, file: {doc.metadata.get('source_file', 'unknown')}, chunk: {doc.metadata.get('chunk_index', '?')}")
         
         # Combine context for answer generation
         context = "\n\n---\n\n".join(context_parts) if context_parts else ""
         
-        # Generate answer (basic for now - will integrate with LLM in Phase 2)
-        if context:
-            answer = f"Based on the retrieved context:\n\n{context}\n\n---\nNote: Full LLM-powered answer generation will be available in Phase 2."
-        else:
-            answer = "No relevant documents found for your query. Please try rephrasing or ensure relevant documents have been ingested."
+        logger.info(f"Combined context length: {len(context)} chars")
         
-        return {
+        # Generate answer using LLM if available
+        if context and self.llm:
+            try:
+                logger.info("Generating answer with LLM...")
+                from langchain_core.messages import HumanMessage, SystemMessage
+                
+                system_message = SystemMessage(
+                    content="You are a helpful AI assistant. Answer the user's question based on the provided context. "
+                           "If the context doesn't contain enough information to answer the question, say so honestly."
+                )
+                
+                user_message = HumanMessage(
+                    content=f"""Context:
+{context}
+
+Question: {query_text}
+
+Answer:"""
+                )
+                
+                # Handle streaming vs non-streaming
+                if stream and self.llm:
+                    # For streaming, we'll return a special marker
+                    # The actual streaming will be handled separately
+                    logger.info("Streaming mode requested but not yet implemented - using non-streaming")
+                    response = self.llm.invoke([system_message, user_message])
+                    answer = response.content
+                else:
+                    # Non-streaming: invoke and return complete response
+                    response = self.llm.invoke([system_message, user_message])
+                    answer = response.content
+                
+                logger.info(f"LLM generated answer (length: {len(answer)})")
+                
+            except Exception as e:
+                logger.error(f"LLM generation failed: {e}")
+                answer = f"Retrieved relevant context but LLM generation failed: {str(e)}\n\nContext:\n{context}"
+        else:
+            # Fallback: return context without LLM processing
+            if context:
+                answer = f"Retrieved relevant context (LLM not available for answer generation):\n\n{context}"
+            else:
+                answer = "No relevant documents found for your query. Please try rephrasing or ensure relevant documents have been ingested."
+        
+        result = {
             "answer": answer,
             "sources": sources,
             "num_sources": len(sources),
             "query": query_text,
             "collection": collection,
         }
+        
+        logger.info(f"=== QUERY END ===")
+        logger.info(f"Final sources count: {len(sources)}")
+        
+        return result
     
     def get_info(self) -> Dict[str, Any]:
         """
