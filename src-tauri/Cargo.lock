@@ -37,6 +37,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-hardware",
  "tauri-plugin-http",
+ "tauri-plugin-langchain",
  "tauri-plugin-llamacpp",
  "tauri-plugin-log",
  "tauri-plugin-opener",
@@ -6271,6 +6272,22 @@ dependencies = [
  "tokio",
  "url",
  "urlpattern",
+]
+
+[[package]]
+name = "tauri-plugin-langchain"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dirs",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.17",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

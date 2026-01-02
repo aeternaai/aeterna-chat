@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-get-service-info"
+description = "Enables the get_service_info command without any pre-configured scope."
+commands.allow = ["get_service_info"]
+
+[[permission]]
+identifier = "deny-get-service-info"
+description = "Denies the get_service_info command without any pre-configured scope."
+commands.deny = ["get_service_info"]
