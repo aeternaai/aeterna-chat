@@ -6,7 +6,7 @@
  */
 
 import { 
-  BaseExtension,
+  RAGExtension,
   MCPTool, 
   MCPToolCallResult, 
   ExtensionTypeEnum,
@@ -65,7 +65,7 @@ interface QueryResponse {
   collection: string
 }
 
-export default class LangChainRagExtension extends BaseExtension {
+export default class LangChainRagExtension extends RAGExtension {
   type(): ExtensionTypeEnum | undefined {
     return ExtensionTypeEnum.LangChainRAG
   }
@@ -146,7 +146,17 @@ export default class LangChainRagExtension extends BaseExtension {
    * Listen for workspace files added and ingest them to LangChain RAG
    */
   private setupWorkspaceFileListener(): void {
+    console.log('[LangChain RAG] 📡 Setting up workspace file listener...')
+    
     events.on(WorkspaceEvent.OnFileAdded, async (file: WorkspaceFile) => {
+      console.log('[LangChain RAG] 📥 WorkspaceEvent.OnFileAdded triggered:', {
+        file_id: file.id,
+        file_name: file.name,
+        file_path: file.file_path,
+        workspace_id: file.workspace_id,
+        enabled: this.config.enabled
+      })
+      
       if (!this.config.enabled) {
         console.log('[LangChain RAG] Extension disabled, skipping file indexing')
         return
@@ -158,7 +168,8 @@ export default class LangChainRagExtension extends BaseExtension {
         return
       }
 
-      console.log('[LangChain RAG] Workspace file added, starting indexing:', file.id, file.name)
+      console.log('[LangChain RAG] 📂 Workspace file added, starting indexing:', file.id, file.name)
+      console.log('[LangChain RAG] 🗂️  Collection will be: thread_' + file.workspace_id)
 
       // Mark as in-progress
       this.ingestionInProgress.add(file.id)
@@ -176,6 +187,8 @@ export default class LangChainRagExtension extends BaseExtension {
         this.ingestionInProgress.delete(file.id)
       }
     })
+    
+    console.log('[LangChain RAG] ✓ Workspace file listener registered')
   }
 
   /**
@@ -407,7 +420,7 @@ export default class LangChainRagExtension extends BaseExtension {
     
     const tool: MCPTool = {
       name: 'retrieve_langchain',
-      description: 'Retrieve relevant context from ingested documents using LangChain. Returns an AI-generated answer with sources.',
+      description: 'ALWAYS search the user\'s workspace documents first before answering any question. This tool retrieves relevant context from ingested documents and knowledge base using LangChain vector search. Use this for ANY query that could benefit from workspace-specific information, documentation, or context. Returns an AI-generated answer with source citations.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -464,6 +477,7 @@ export default class LangChainRagExtension extends BaseExtension {
       console.log('[LangChain RAG]   threadId:', threadId)
       console.log('[LangChain RAG]   query:', query)
       console.log('[LangChain RAG]   fileIds:', fileIds)
+      console.log('[LangChain RAG]   🗂️  Collection will be: thread_' + threadId)
 
       if (!threadId || !query) {
         console.error('[LangChain RAG] Missing required parameters')
@@ -486,6 +500,17 @@ export default class LangChainRagExtension extends BaseExtension {
           console.error('[LangChain RAG] ERROR: sources is not an array!', result.sources)
           throw new Error('Invalid sources format from queryRag')
         }
+        
+        // Log ALL retrieved documents with scores BEFORE filtering
+        console.log('[LangChain RAG] ====== ALL RETRIEVED DOCUMENTS ======')
+        result.sources.forEach((source, idx) => {
+          console.log(`[LangChain RAG] 📄 Document ${idx + 1}/${result.sources.length}:`)
+          console.log(`  Score: ${(source.score * 100).toFixed(2)}% (${source.score.toFixed(4)})`)
+          console.log(`  File: ${source.metadata?.source_file || 'unknown'}`)
+          console.log(`  Chunk: ${source.metadata?.chunk_index || 'N/A'}`)
+          console.log(`  Content Preview: ${source.content?.substring(0, 150).replace(/\n/g, ' ')}...`)
+        })
+        console.log('[LangChain RAG] ====== END ALL DOCUMENTS ======')
         
         // Filter sources by relevance threshold (default 0.5)
         const threshold = 0.5
