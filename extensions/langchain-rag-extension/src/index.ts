@@ -63,6 +63,7 @@ interface QueryResponse {
   num_sources: number
   query: string
   collection: string
+  processing_time_ms: number
 }
 
 export default class LangChainRagExtension extends RAGExtension {
@@ -360,6 +361,67 @@ export default class LangChainRagExtension extends RAGExtension {
       filesProcessed: processedFiles.length,
       chunksInserted: totalChunks,
       files: processedFiles,
+    }
+  }
+
+  /**
+   * Retrieve relevant documents with threshold filtering (for pre-retrieval)
+   * Returns only documents above the relevance threshold
+   */
+  async retrieveDocuments(threadId: string, query: string, threshold: number = 0.5): Promise<{
+    sources: Array<{ content: string; metadata: Record<string, unknown>; score: number }>
+    num_sources: number
+  }> {
+    if (!this.config.enabled) {
+      console.log('[LangChain RAG] Extension disabled, returning empty sources')
+      return { sources: [], num_sources: 0 }
+    }
+
+    await this.ensureServiceRunning()
+    const collection = this.getCollectionName(threadId)
+
+    console.log('[LangChain RAG] ====== PRE-RETRIEVAL MODE ======')
+    console.log('[LangChain RAG] Thread ID:', threadId)
+    console.log('[LangChain RAG] Collection:', collection)
+    console.log('[LangChain RAG] Query:', query)
+    console.log('[LangChain RAG] Threshold:', threshold)
+
+    try {
+      const params: QueryParams = {
+        query,
+        collection,
+        k: this.config.retrieval_limit,
+      }
+
+      const result = await invoke<QueryResponse>('plugin:langchain|query_rag', { params })
+
+      console.log('[LangChain RAG] Query response received')
+      console.log('[LangChain RAG]   Query:', result.query)
+      console.log('[LangChain RAG]   Collection:', result.collection)
+      console.log('[LangChain RAG]   Retrieved:', result.sources?.length || 0, 'documents')
+      console.log('[LangChain RAG]   Answer length:', result.answer?.length || 0, 'chars')
+
+      if (!result.sources || !Array.isArray(result.sources)) {
+        console.warn('[LangChain RAG] No sources in response')
+        return { sources: [], num_sources: 0 }
+      }
+
+      // Filter by threshold
+      const filtered = result.sources.filter(s => s.score >= threshold)
+      
+      console.log('[LangChain RAG] Filtered to', filtered.length, 'documents above threshold', threshold)
+      filtered.forEach((source, idx) => {
+        console.log(`[LangChain RAG]   ${idx + 1}. Score: ${(source.score * 100).toFixed(1)}% - ${source.metadata?.source_file || 'unknown'}`)
+      })
+
+      return { sources: filtered, num_sources: filtered.length }
+    } catch (error) {
+      console.error('[LangChain RAG] Pre-retrieval failed:', error)
+      // Log full error details for debugging
+      if (error && typeof error === 'object') {
+        console.error('[LangChain RAG] Error details:', JSON.stringify(error, null, 2))
+      }
+      return { sources: [], num_sources: 0 }
     }
   }
 

@@ -395,6 +395,9 @@ class LangChainService:
                 "answer": f"Collection '{collection}' not found. Please ingest documents first.",
                 "sources": [],
                 "num_sources": 0,
+                "query": query_text,
+                "collection": collection,
+                "processing_time_ms": 0,
             }
         
         logger.info(f"Collection '{collection}' found")
@@ -498,6 +501,7 @@ Answer:"""
             "num_sources": len(sources),
             "query": query_text,
             "collection": collection,
+            "processing_time_ms": 0,
         }
         
         logger.info(f"=== QUERY END ===")

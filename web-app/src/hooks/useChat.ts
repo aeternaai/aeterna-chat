@@ -1041,56 +1041,59 @@ export const useChat = () => {
         console.log('[useChat] Initial availableTools count:', availableTools.length)
         console.log('[useChat] Initial tools:', availableTools.map(t => `${t.server}::${t.name}`))
 
-        // Always inject LangChain RAG tools for workspace document retrieval
-        // Workspace files are indexed to Qdrant and available for retrieval
+        // PRE-RETRIEVAL: Always retrieve workspace documents BEFORE LLM call
+        // This guarantees RAG context is included without relying on model tool calling
         const ragFeatureAvailable =
           useAttachments.getState().enabled &&
           PlatformFeatures[PlatformFeature.FILE_ATTACHMENTS]
         
         console.log('[useChat] RAG feature available:', ragFeatureAvailable)
         
-        if (ragFeatureAvailable) {
+        if (ragFeatureAvailable && !continueFromMessageId) {
           try {
-            console.log('[useChat] Attempting to inject LangChain RAG tools for workspace retrieval')
+            console.log('[useChat] ====== PRE-RETRIEVAL RAG MODE ======')
+            console.log('[useChat] Retrieving workspace documents before LLM call...')
             
-            // Use LangChain RAG for workspace document retrieval
             const langchainExt = ExtensionManager.getInstance().get<RAGExtension>(ExtensionTypeEnum.LangChainRAG)
-            console.log('[useChat] LangChain extension found:', !!langchainExt)
             
-            if (langchainExt) {
-              console.log('[useChat] Calling getTools() on LangChain extension...')
-              const ragTools = (await langchainExt?.getTools?.().catch((err) => {
-                console.error('[useChat] Error calling getTools():', err)
-                return []
-              })) || []
+            if (langchainExt && (langchainExt as any).retrieveDocuments) {
+              const threshold = 0.5
+              const retrieveResult = await (langchainExt as any).retrieveDocuments(
+                activeThread.id,
+                message,
+                threshold
+              ).catch((err: Error) => {
+                console.error('[useChat] Pre-retrieval failed:', err)
+                return { sources: [], num_sources: 0 }
+              })
               
-              console.log('[useChat] getTools() returned:', ragTools.length, 'tools')
-              console.log('[useChat] ragTools type:', typeof ragTools)
-              console.log('[useChat] ragTools is array:', Array.isArray(ragTools))
-              console.log('[useChat] ragTools value:', ragTools)
-              if (ragTools.length > 0) {
-                ragTools.forEach(tool => console.log('[useChat]   - Tool name:', tool?.name, 'server:', tool?.server))
-              }
+              console.log('[useChat] Pre-retrieval complete:', retrieveResult.num_sources, 'documents')
               
-              if (Array.isArray(ragTools) && ragTools.length) {
-                const enabledRagTools = ragTools.filter(
-                  (tool) => !isToolDisabled(tool)
-                )
-                console.log('[useChat] After filtering disabled tools:', enabledRagTools.length, 'tools')
-                enabledRagTools.forEach(tool => console.log('[useChat]   ✓ Enabled tool:', tool.name))
+              if (retrieveResult.sources && retrieveResult.sources.length > 0) {
+                // Build context string from retrieved documents
+                const contextParts = retrieveResult.sources.map((source: any, idx: number) => {
+                  const fileName = source.metadata?.source_file || 'Unknown'
+                  const score = ((source.score || 0) * 100).toFixed(1)
+                  return `[Document ${idx + 1}: ${fileName} (Relevance: ${score}%)]\n${source.content}`
+                })
                 
-                availableTools = [...availableTools, ...enabledRagTools]
-                console.log('[useChat] Total availableTools after injection:', availableTools.length)
-                console.log('[useChat] All tools after injection:', availableTools.map(t => `${t.server}::${t.name}`))
-                console.log('[useChat] ✓ LangChain RAG tools successfully injected')
+                const contextMessage = `**Retrieved Workspace Context** (${retrieveResult.num_sources} relevant documents above ${threshold * 100}% threshold):\n\n${contextParts.join('\n\n---\n\n')}`
+                
+                console.log('[useChat] Adding RAG context to messages:', contextMessage.substring(0, 200), '...')
+                console.log('[useChat] Context length:', contextMessage.length, 'characters')
+                
+                // Add context as a system-level message before user message
+                builder.addUserMessage(contextMessage)
+                
+                console.log('[useChat] ✓ RAG context added to prompt')
               } else {
-                console.warn('[useChat] getTools() returned empty array')
+                console.log('[useChat] No relevant documents found above threshold')
               }
             } else {
-              console.warn('[useChat] LangChain RAG extension not available')
+              console.warn('[useChat] LangChain RAG extension not available or missing retrieveDocuments method')
             }
           } catch (e) {
-            console.warn('[useChat] Failed to inject LangChain RAG tools:', e)
+            console.warn('[useChat] Pre-retrieval failed:', e)
           }
         }
 
