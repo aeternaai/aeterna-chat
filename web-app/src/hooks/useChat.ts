@@ -1004,6 +1004,9 @@ export const useChat = () => {
           useAttachments.getState().enabled &&
           PlatformFeatures[PlatformFeature.FILE_ATTACHMENTS]
         
+        // Store RAG retrieval result for later attachment to assistant message metadata
+        let ragSourcesMetadata: { sources: any[]; query: string; threshold: number } | null = null
+        
         console.log('[useChat] RAG feature available:', ragFeatureAvailable)
         
         if (ragFeatureAvailable && !continueFromMessageId) {
@@ -1030,6 +1033,13 @@ export const useChat = () => {
               })
               
               console.log('[useChat] Pre-retrieval complete:', retrieveResult.num_sources, 'documents')
+              
+              // Store RAG sources for later attachment to assistant message
+              ragSourcesMetadata = {
+                sources: retrieveResult.sources || [],
+                query: message,
+                threshold: threshold,
+              }
               
               if (retrieveResult.sources && retrieveResult.sources.length > 0) {
                 // Build context string from retrieved documents using the 'chunk' field
@@ -1305,6 +1315,10 @@ export const useChat = () => {
                   reasoning: routeDecision.reasoning,
                 },
               }),
+              // Include RAG sources if available
+              ...(ragSourcesMetadata && {
+                ragSources: ragSourcesMetadata,
+              }),
             }
           )
 
@@ -1401,6 +1415,10 @@ export const useChat = () => {
                     reasoning: routeDecision.reasoning,
                   },
                 }),
+                // Include RAG sources if available
+                ...(ragSourcesMetadata && {
+                  ragSources: ragSourcesMetadata,
+                }),
               },
             })
           } else {
@@ -1421,6 +1439,10 @@ export const useChat = () => {
                       confidence: routeDecision.confidence,
                       reasoning: routeDecision.reasoning,
                     },
+                  }),
+                  // Include RAG sources if available
+                  ...(ragSourcesMetadata && {
+                    ragSources: ragSourcesMetadata,
                   }),
                 }
               ),
@@ -1478,6 +1500,10 @@ export const useChat = () => {
                     reasoning: routeDecision.reasoning,
                   },
                 }),
+                // Include RAG sources if available
+                ...(ragSourcesMetadata && {
+                  ragSources: ragSourcesMetadata,
+                }),
               },
             })
           } else {
@@ -1494,6 +1520,10 @@ export const useChat = () => {
                     confidence: routeDecision.confidence,
                     reasoning: routeDecision.reasoning,
                   },
+                }),
+                // Include RAG sources if available
+                ...(ragSourcesMetadata && {
+                  ragSources: ragSourcesMetadata,
                 }),
               }),
               status: MessageStatus.Stopped,
