@@ -30,6 +30,9 @@ pub async fn run_migrations(pool: &SqlitePool) -> DbResult<()> {
 
     // Run migration 001: Initial schema
     run_migration_001(pool).await?;
+    
+    // Run migration 002: Add RAG columns to workspace_files
+    run_migration_002(pool).await?;
 
     log::info!("All migrations completed successfully");
     Ok(())
@@ -208,6 +211,78 @@ async fn run_migration_001(pool: &SqlitePool) -> DbResult<()> {
     tx.commit().await?;
 
     log::info!("Migration 001 completed in {}ms", duration);
+    Ok(())
+}
+
+/// Migration 002: Add RAG columns to workspace_files
+async fn run_migration_002(pool: &SqlitePool) -> DbResult<()> {
+    // Check if migration already applied
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = 2)"
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false);
+
+    if exists {
+        log::debug!("Migration 002 already applied, skipping");
+        return Ok(());
+    }
+
+    log::info!("Running migration 002: Add RAG columns to workspace_files");
+    let start = std::time::Instant::now();
+
+    let mut tx = pool.begin().await?;
+
+    // Add RAG tracking columns to workspace_files
+    sqlx::query(
+        r#"
+        ALTER TABLE workspace_files ADD COLUMN rag_status TEXT DEFAULT 'pending';
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        ALTER TABLE workspace_files ADD COLUMN rag_chunks INTEGER DEFAULT 0;
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        ALTER TABLE workspace_files ADD COLUMN rag_indexed_at INTEGER;
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        ALTER TABLE workspace_files ADD COLUMN rag_error TEXT;
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    // Record migration
+    let duration = start.elapsed().as_millis() as i64;
+    sqlx::query(
+        r#"
+        INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
+        VALUES (2, 'Add RAG columns to workspace_files', 1, X'00', ?1);
+        "#,
+    )
+    .bind(duration)
+    .execute(&mut *tx)
+    .await?;
+
+    // Commit transaction
+    tx.commit().await?;
+
+    log::info!("Migration 002 completed in {}ms", duration);
     Ok(())
 }
 

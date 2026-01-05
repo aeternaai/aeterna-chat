@@ -15,6 +15,7 @@ use rmcp::{
 use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
 use tokio::process::Child;
+use tokio_util::sync::CancellationToken;
 
 /// Server handle type for managing the proxy server lifecycle
 pub type ServerHandle = JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>;
@@ -46,6 +47,8 @@ pub struct AppState {
     pub router_config: Arc<Mutex<RouterConfig>>,
     // Tool output cache for large MCP responses
     pub tool_output_cache: ToolOutputCache,
+    // Workspace file indexing state
+    pub workspace_indexing_tokens: Arc<Mutex<HashMap<String, CancellationToken>>>,
 }
 
 impl RunningServiceEnum {

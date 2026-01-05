@@ -25,7 +25,8 @@ import {
   ChatCompletionMessageToolCall,
   CompletionUsage,
 } from 'openai/resources'
-import { MessageStatus, ContentType, ThreadMessage } from '@janhq/core'
+import { MessageStatus, ContentType, ThreadMessage, ExtensionTypeEnum, type RAGExtension } from '@janhq/core'
+import { ExtensionManager } from '@/lib/extension'
 import { useAttachments } from '@/hooks/useAttachments'
 import { PlatformFeatures } from '@/lib/platform/const'
 import { PlatformFeature } from '@/lib/platform/types'
@@ -997,6 +998,81 @@ export const useChat = () => {
           : []
         const modelSupportsVision = modelCapabilities.includes(ModelCapabilities.VISION)
 
+        // PRE-RETRIEVAL: Always retrieve workspace documents BEFORE building the prompt
+        // This guarantees RAG context is included without relying on model tool calling
+        const ragFeatureAvailable =
+          useAttachments.getState().enabled &&
+          PlatformFeatures[PlatformFeature.FILE_ATTACHMENTS]
+        
+        // Store RAG retrieval result for later attachment to assistant message metadata
+        let ragSourcesMetadata: { sources: any[]; query: string; threshold: number } | null = null
+        
+        console.log('[useChat] RAG feature available:', ragFeatureAvailable)
+        
+        if (ragFeatureAvailable && !continueFromMessageId) {
+          try {
+            console.log('[useChat] ====== PRE-RETRIEVAL RAG MODE ======')
+            console.log('[useChat] Retrieving workspace documents before LLM call...')
+            
+            const langchainExt = ExtensionManager.getInstance().get<RAGExtension>(ExtensionTypeEnum.LangChainRAG)
+            
+            if (langchainExt && (langchainExt as any).retrieveDocuments) {
+              const threshold = 0.5
+              
+              // Get workspace_id from thread if available
+              const workspaceId = (activeThread as any).workspace_id
+              console.log('[useChat] Thread workspace_id:', workspaceId || 'none (global search)')
+              
+              const retrieveResult = await (langchainExt as any).retrieveDocuments(
+                message,
+                threshold,
+                workspaceId
+              ).catch((err: Error) => {
+                console.error('[useChat] Pre-retrieval failed:', err)
+                return { sources: [], num_sources: 0 }
+              })
+              
+              console.log('[useChat] Pre-retrieval complete:', retrieveResult.num_sources, 'documents')
+              
+              // Store RAG sources for later attachment to assistant message
+              ragSourcesMetadata = {
+                sources: retrieveResult.sources || [],
+                query: message,
+                threshold: threshold,
+              }
+              
+              if (retrieveResult.sources && retrieveResult.sources.length > 0) {
+                // Build context string from retrieved documents using the 'chunk' field
+                const contextParts = retrieveResult.sources.map((source: any, idx: number) => {
+                  const fileName = source.file || 'Unknown'
+                  const score = ((source.score || 0) * 100).toFixed(1)
+                  return `[Document ${idx + 1}: ${fileName} (Relevance: ${score}%)]\n${source.chunk}`
+                })
+                
+                const contextMessage = `**Retrieved Workspace Context** (${retrieveResult.num_sources} relevant documents above ${threshold * 100}% threshold):\n\n${contextParts.join('\n\n---\n\n')}`
+                
+                console.log('[useChat] Adding RAG context to messages:', contextMessage.substring(0, 200), '...')
+                console.log('[useChat] Context length:', contextMessage.length, 'characters')
+                
+                // Prepend context to the user message by modifying the userContent before it's added
+                // Modify the userContent to include RAG context at the beginning
+                if (userContent.content && userContent.content.length > 0 && userContent.content[0].text) {
+                  const originalText = userContent.content[0].text.value
+                  userContent.content[0].text.value = `${contextMessage}\n\n---\n\nUser Query: ${originalText}`
+                }
+                
+                console.log('[useChat] ✓ RAG context prepended to user message')
+              } else {
+                console.log('[useChat] No relevant documents found above threshold')
+              }
+            } else {
+              console.warn('[useChat] LangChain RAG extension not available or missing retrieveDocuments method')
+            }
+          } catch (e) {
+            console.warn('[useChat] Pre-retrieval failed:', e)
+          }
+        }
+
         const builder = new CompletionMessagesBuilder(
           contextMessages,
           currentAssistant
@@ -1035,31 +1111,10 @@ export const useChat = () => {
               .tools.filter((tool) => !isToolDisabled(tool))
           : []
 
-        // Conditionally inject RAG if tools are supported and documents are attached
-        const ragFeatureAvailable =
-          useAttachments.getState().enabled &&
-          PlatformFeatures[PlatformFeature.FILE_ATTACHMENTS]
-        // Check if documents were attached in the current thread
-        const hasDocuments = useThreads
-          .getState()
-          .getThreadById(activeThread.id)?.metadata?.hasDocuments
-        if (hasDocuments && ragFeatureAvailable) {
-          try {
-            const ragTools = await serviceHub
-              .rag()
-              .getTools()
-              .catch(() => [])
-            if (Array.isArray(ragTools) && ragTools.length) {
-              const enabledRagTools = ragTools.filter(
-                (tool) => !isToolDisabled(tool)
-              )
-              availableTools = [...availableTools, ...enabledRagTools]
-              console.log('RAG tools injected for completion.')
-            }
-          } catch (e) {
-            console.warn('Failed to inject RAG tools:', e)
-          }
-        }
+        console.log('[useChat] ====== TOOLS INJECTION FLOW ======')
+        console.log('[useChat] Model supports tools:', selectedModel?.capabilities?.includes('tools'))
+        console.log('[useChat] Initial availableTools count:', availableTools.length)
+        console.log('[useChat] Initial tools:', availableTools.map(t => `${t.server}::${t.name}`))
 
         // Check if proactive mode is enabled in MCP settings and model has required capabilities
         const hasRequiredCapabilities =
@@ -1134,6 +1189,13 @@ export const useChat = () => {
               ...(currentAssistant?.parameters || {}),
             } as unknown as Record<string, object>
           )
+
+          console.log('[useChat] ====== COMPLETION REQUEST SENT ======')
+          console.log('[useChat] Tools sent to LLM:', availableTools.length)
+          availableTools.forEach(tool => {
+            console.log(`[useChat]   - ${tool.server}::${tool.name}`)
+          })
+          console.log('[useChat] Completion response received')
 
           if (!completion) throw new Error('No completion received')
           const currentCall: ChatCompletionMessageToolCall | null = null
@@ -1253,6 +1315,10 @@ export const useChat = () => {
                   reasoning: routeDecision.reasoning,
                 },
               }),
+              // Include RAG sources if available
+              ...(ragSourcesMetadata && {
+                ragSources: ragSourcesMetadata,
+              }),
             }
           )
 
@@ -1349,6 +1415,10 @@ export const useChat = () => {
                     reasoning: routeDecision.reasoning,
                   },
                 }),
+                // Include RAG sources if available
+                ...(ragSourcesMetadata && {
+                  ragSources: ragSourcesMetadata,
+                }),
               },
             })
           } else {
@@ -1369,6 +1439,10 @@ export const useChat = () => {
                       confidence: routeDecision.confidence,
                       reasoning: routeDecision.reasoning,
                     },
+                  }),
+                  // Include RAG sources if available
+                  ...(ragSourcesMetadata && {
+                    ragSources: ragSourcesMetadata,
                   }),
                 }
               ),
@@ -1426,6 +1500,10 @@ export const useChat = () => {
                     reasoning: routeDecision.reasoning,
                   },
                 }),
+                // Include RAG sources if available
+                ...(ragSourcesMetadata && {
+                  ragSources: ragSourcesMetadata,
+                }),
               },
             })
           } else {
@@ -1442,6 +1520,10 @@ export const useChat = () => {
                     confidence: routeDecision.confidence,
                     reasoning: routeDecision.reasoning,
                   },
+                }),
+                // Include RAG sources if available
+                ...(ragSourcesMetadata && {
+                  ragSources: ragSourcesMetadata,
                 }),
               }),
               status: MessageStatus.Stopped,

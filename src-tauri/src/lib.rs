@@ -36,7 +36,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_llamacpp::init())
         .plugin(tauri_plugin_vector_db::init())
-        .plugin(tauri_plugin_rag::init());
+        .plugin(tauri_plugin_rag::init())
+        .plugin(tauri_plugin_langchain::init());
 
     #[cfg(feature = "deep-link")]
     {
@@ -142,6 +143,10 @@ pub fn run() {
             core::workspaces::commands::remove_workspace_file,
             core::workspaces::commands::update_workspace_file,
             core::workspaces::commands::validate_workspace_file,
+            core::workspaces::commands::update_workspace_file_rag_status,
+            core::workspaces::commands::get_workspace_file_rag_status,
+            core::workspaces::commands::ingest_workspace_file,
+            core::workspaces::commands::cancel_workspace_file_indexing,
             // Folder commands
             core::folders::commands::create_folder,
             core::folders::commands::get_folder,
@@ -173,6 +178,7 @@ pub fn run() {
             router_process: Arc::new(Mutex::new(None)),
             router_config: Arc::new(Mutex::new(RouterConfig::default())),
             tool_output_cache: Default::default(),
+            workspace_indexing_tokens: Arc::new(Mutex::new(HashMap::new())),
         })
         .setup(|app| {
             app.handle().plugin(

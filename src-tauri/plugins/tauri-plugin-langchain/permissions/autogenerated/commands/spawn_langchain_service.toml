@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-spawn-langchain-service"
+description = "Enables the spawn_langchain_service command without any pre-configured scope."
+commands.allow = ["spawn_langchain_service"]
+
+[[permission]]
+identifier = "deny-spawn-langchain-service"
+description = "Denies the spawn_langchain_service command without any pre-configured scope."
+commands.deny = ["spawn_langchain_service"]

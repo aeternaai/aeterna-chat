@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-shutdown-langchain-service"
+description = "Enables the shutdown_langchain_service command without any pre-configured scope."
+commands.allow = ["shutdown_langchain_service"]
+
+[[permission]]
+identifier = "deny-shutdown-langchain-service"
+description = "Denies the shutdown_langchain_service command without any pre-configured scope."
+commands.deny = ["shutdown_langchain_service"]

@@ -1,0 +1,10 @@
+[default]
+description = "Default permissions for the langchain plugin"
+permissions = [
+  "allow-spawn-langchain-service",
+  "allow-shutdown-langchain-service",
+  "allow-health-check",
+  "allow-ingest-document",
+  "allow-query-rag",
+  "allow-get-service-info",
+]

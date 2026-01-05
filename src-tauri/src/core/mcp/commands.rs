@@ -1106,8 +1106,6 @@ pub async fn clear_tool_output_cache(state: State<'_, AppState>) -> Result<(), S
 /// * `Result<CacheStats, String>` - Cache statistics if successful
 #[tauri::command]
 pub async fn get_cache_stats(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    use crate::core::mcp::cache::CacheStats;
-    
     let stats = state.tool_output_cache.stats().await;
     Ok(serde_json::json!({
         "totalEntries": stats.total_entries,

@@ -17,6 +17,7 @@ export enum ExtensionTypeEnum {
   VectorDB = 'vectorDB',
   Router = 'router',
   Workspace = 'workspace',
+  LangChainRAG = 'langchain-rag',
 }
 
 export interface ExtensionType {

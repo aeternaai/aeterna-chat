@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-ingest-document"
+description = "Enables the ingest_document command without any pre-configured scope."
+commands.allow = ["ingest_document"]
+
+[[permission]]
+identifier = "deny-ingest-document"
+description = "Denies the ingest_document command without any pre-configured scope."
+commands.deny = ["ingest_document"]

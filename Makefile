@@ -58,7 +58,22 @@ install-ios-rust-targets:
 	@rustup target list --installed | grep -q "x86_64-apple-ios" || rustup target add x86_64-apple-ios
 	@echo "iOS Rust targets ready!"
 
-dev: install-and-build
+# Setup LangChain Python environment for RAG features
+setup-langchain:
+	@echo "Setting up LangChain Python environment..."
+	@if [ ! -d "src-tauri/plugins/tauri-plugin-langchain/python/venv" ]; then \
+		cd src-tauri/plugins/tauri-plugin-langchain/python && chmod +x setup.sh && ./setup.sh; \
+	else \
+		echo "LangChain venv already exists. To reinstall, run: make clean-langchain setup-langchain"; \
+	fi
+
+# Clean LangChain Python environment
+clean-langchain:
+	@echo "Cleaning LangChain Python environment..."
+	rm -rf src-tauri/plugins/tauri-plugin-langchain/python/venv
+	@echo "LangChain environment cleaned."
+
+dev: install-and-build setup-langchain
 	yarn download:bin
 	yarn dev
 

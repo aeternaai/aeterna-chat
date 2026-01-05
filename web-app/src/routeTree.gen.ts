@@ -22,6 +22,7 @@ import { Route as SettingsRouterImport } from './routes/settings/router'
 import { Route as SettingsPrivacyImport } from './routes/settings/privacy'
 import { Route as SettingsMcpServersImport } from './routes/settings/mcp-servers'
 import { Route as SettingsLocalApiServerImport } from './routes/settings/local-api-server'
+import { Route as SettingsLangchainRagImport } from './routes/settings/langchain-rag'
 import { Route as SettingsInterfaceImport } from './routes/settings/interface'
 import { Route as SettingsHttpsProxyImport } from './routes/settings/https-proxy'
 import { Route as SettingsHardwareImport } from './routes/settings/hardware'
@@ -101,6 +102,12 @@ const SettingsMcpServersRoute = SettingsMcpServersImport.update({
 const SettingsLocalApiServerRoute = SettingsLocalApiServerImport.update({
   id: '/settings/local-api-server',
   path: '/settings/local-api-server',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const SettingsLangchainRagRoute = SettingsLangchainRagImport.update({
+  id: '/settings/langchain-rag',
+  path: '/settings/langchain-rag',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -278,6 +285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsInterfaceImport
       parentRoute: typeof rootRoute
     }
+    '/settings/langchain-rag': {
+      id: '/settings/langchain-rag'
+      path: '/settings/langchain-rag'
+      fullPath: '/settings/langchain-rag'
+      preLoaderRoute: typeof SettingsLangchainRagImport
+      parentRoute: typeof rootRoute
+    }
     '/settings/local-api-server': {
       id: '/settings/local-api-server'
       path: '/settings/local-api-server'
@@ -374,6 +388,7 @@ export interface FileRoutesByFullPath {
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/interface': typeof SettingsInterfaceRoute
+  '/settings/langchain-rag': typeof SettingsLangchainRagRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
@@ -401,6 +416,7 @@ export interface FileRoutesByTo {
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/interface': typeof SettingsInterfaceRoute
+  '/settings/langchain-rag': typeof SettingsLangchainRagRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
@@ -429,6 +445,7 @@ export interface FileRoutesById {
   '/settings/hardware': typeof SettingsHardwareRoute
   '/settings/https-proxy': typeof SettingsHttpsProxyRoute
   '/settings/interface': typeof SettingsInterfaceRoute
+  '/settings/langchain-rag': typeof SettingsLangchainRagRoute
   '/settings/local-api-server': typeof SettingsLocalApiServerRoute
   '/settings/mcp-servers': typeof SettingsMcpServersRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
@@ -458,6 +475,7 @@ export interface FileRouteTypes {
     | '/settings/hardware'
     | '/settings/https-proxy'
     | '/settings/interface'
+    | '/settings/langchain-rag'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
     | '/settings/privacy'
@@ -484,6 +502,7 @@ export interface FileRouteTypes {
     | '/settings/hardware'
     | '/settings/https-proxy'
     | '/settings/interface'
+    | '/settings/langchain-rag'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
     | '/settings/privacy'
@@ -510,6 +529,7 @@ export interface FileRouteTypes {
     | '/settings/hardware'
     | '/settings/https-proxy'
     | '/settings/interface'
+    | '/settings/langchain-rag'
     | '/settings/local-api-server'
     | '/settings/mcp-servers'
     | '/settings/privacy'
@@ -538,6 +558,7 @@ export interface RootRouteChildren {
   SettingsHardwareRoute: typeof SettingsHardwareRoute
   SettingsHttpsProxyRoute: typeof SettingsHttpsProxyRoute
   SettingsInterfaceRoute: typeof SettingsInterfaceRoute
+  SettingsLangchainRagRoute: typeof SettingsLangchainRagRoute
   SettingsLocalApiServerRoute: typeof SettingsLocalApiServerRoute
   SettingsMcpServersRoute: typeof SettingsMcpServersRoute
   SettingsPrivacyRoute: typeof SettingsPrivacyRoute
@@ -565,6 +586,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsHardwareRoute: SettingsHardwareRoute,
   SettingsHttpsProxyRoute: SettingsHttpsProxyRoute,
   SettingsInterfaceRoute: SettingsInterfaceRoute,
+  SettingsLangchainRagRoute: SettingsLangchainRagRoute,
   SettingsLocalApiServerRoute: SettingsLocalApiServerRoute,
   SettingsMcpServersRoute: SettingsMcpServersRoute,
   SettingsPrivacyRoute: SettingsPrivacyRoute,
@@ -601,6 +623,7 @@ export const routeTree = rootRoute
         "/settings/hardware",
         "/settings/https-proxy",
         "/settings/interface",
+        "/settings/langchain-rag",
         "/settings/local-api-server",
         "/settings/mcp-servers",
         "/settings/privacy",
@@ -652,6 +675,9 @@ export const routeTree = rootRoute
     },
     "/settings/interface": {
       "filePath": "settings/interface.tsx"
+    },
+    "/settings/langchain-rag": {
+      "filePath": "settings/langchain-rag.tsx"
     },
     "/settings/local-api-server": {
       "filePath": "settings/local-api-server.tsx"

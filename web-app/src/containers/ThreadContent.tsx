@@ -9,6 +9,7 @@ import { useMessages } from '@/hooks/useMessages'
 import ThinkingBlock from '@/containers/ThinkingBlock'
 import ToolCallBlock from '@/containers/ToolCallBlock'
 import RoutingReasonBlock from '@/containers/RoutingReasonBlock'
+import SourcesBlock from '@/containers/SourcesBlock'
 import { useChat } from '@/hooks/useChat'
 import {
   EditMessageDialog,
@@ -386,6 +387,14 @@ export const ThreadContent = memo(
                   confidence: number
                   reasoning: string
                 }}
+              />
+            )}
+
+            {/* Show RAG sources if available in metadata */}
+            {item.metadata?.ragSources && (
+              <SourcesBlock
+                sources={(item.metadata.ragSources as any).sources}
+                threshold={(item.metadata.ragSources as any).threshold}
               />
             )}
 

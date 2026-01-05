@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useWorkspace } from '@/hooks/useWorkspace'
+import { useIndexingStore, useIndexingEventSetup } from '@/hooks/useIndexingStore'
 import { WorkspaceVisibility } from '@janhq/core'
+import { invoke } from '@tauri-apps/api/core'
 import {
   IconFolder,
   IconFolderPlus,
@@ -15,6 +17,7 @@ import {
   IconAlertCircle,
   IconLock,
   IconWorld,
+  IconLoader,
 } from '@tabler/icons-react'
 import { cn } from '@/lib/utils'
 import {
@@ -26,6 +29,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n/react-i18next-compat'
 
@@ -35,6 +44,8 @@ interface WorkspaceListProps {
 
 export const WorkspaceList = ({ onAddFile }: WorkspaceListProps) => {
   const { t } = useTranslation()
+  const indexingJobs = useIndexingStore((state) => state.indexingJobs)
+  const removeIndexingJob = useIndexingStore((state) => state.removeIndexingJob)
   const {
     workspaces,
     currentWorkspaceId,
@@ -54,6 +65,11 @@ export const WorkspaceList = ({ onAddFile }: WorkspaceListProps) => {
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+
+  // Setup event listeners for indexing progress
+  useEffect(() => {
+    useIndexingEventSetup()
+  }, [])
 
   useEffect(() => {
     loadWorkspaces()
@@ -328,27 +344,96 @@ export const WorkspaceList = ({ onAddFile }: WorkspaceListProps) => {
               {/* Files list */}
               {isExpanded && files.length > 0 && (
                 <div className="ml-6 flex flex-col gap-0.5 mt-1">
-                  {files.map((file) => (
-                    <div
-                      key={file.id}
-                      className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent group"
-                    >
-                      <IconFile size={12} className="shrink-0 text-muted-foreground" />
-                      <span className="text-xs truncate flex-1" title={file.file_path}>
-                        {file.name}
-                      </span>
-                      {!file.is_valid && (
-                        <IconAlertCircle size={12} className="shrink-0 text-destructive" />
-                      )}
-                      <Button
-                        variant="default"
-                        className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100"
-                        onClick={() => handleRemoveFile(file.id)}
+                  {files.map((file) => {
+                    const indexingJob = indexingJobs[file.id]
+                    const isIndexing = indexingJob?.status === 'processing'
+                    const indexingError = indexingJob?.status === 'failed' ? indexingJob.error : undefined
+                    
+                    return (
+                      <div
+                        key={file.id}
+                        className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-accent group"
                       >
-                        <IconTrash size={10} />
-                      </Button>
-                    </div>
-                  ))}
+                        <IconFile size={12} className="shrink-0 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs truncate block" title={file.file_path}>
+                            {file.name}
+                          </span>
+                          {/* Indexing progress bar */}
+                          {isIndexing && (
+                            <div className="w-full bg-accent rounded-full h-1 mt-0.5 overflow-hidden">
+                              <div
+                                className="bg-primary h-full transition-all duration-300"
+                                style={{ width: `${indexingJob.percent}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Status indicators */}
+                        {isIndexing && (
+                          <div className="flex items-center gap-1 opacity-100 group-hover:opacity-100">
+                            <IconLoader size={12} className="shrink-0 text-primary animate-spin" />
+                            <span className="text-xs text-primary whitespace-nowrap">
+                              {Math.round(indexingJob.percent)}%
+                            </span>
+                          </div>
+                        )}
+                        
+                        {indexingError && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <IconAlertCircle size={12} className="shrink-0 text-destructive" />
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="max-w-xs">
+                                <p className="text-xs">{indexingError}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+
+                        {!file.is_valid && !isIndexing && !indexingError && (
+                          <IconAlertCircle size={12} className="shrink-0 text-destructive" />
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-1">
+                          {isIndexing && (
+                            <Button
+                              variant="default"
+                              className="h-4 w-4 p-0"
+                              onClick={async () => {
+                                try {
+                                  await invoke('cancel_workspace_file_indexing', {
+                                    fileId: file.id,
+                                  })
+                                  removeIndexingJob(file.id)
+                                  toast.success('Indexing cancelled')
+                                } catch (error) {
+                                  console.error('Failed to cancel indexing:', error)
+                                  toast.error('Failed to cancel indexing')
+                                }
+                              }}
+                              title="Cancel indexing"
+                            >
+                              <IconX size={10} />
+                            </Button>
+                          )}
+                          
+                          {!isIndexing && (
+                            <Button
+                              variant="default"
+                              className="h-4 w-4 p-0 opacity-0 group-hover:opacity-100"
+                              onClick={() => handleRemoveFile(file.id)}
+                            >
+                              <IconTrash size={10} />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
 

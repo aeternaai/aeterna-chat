@@ -249,6 +249,33 @@ export const sendCompletion = async (
   }
   const engine = ExtensionManager.getInstance().getEngine(provider.provider)
 
+  // Log final prompt/messages sent to LLM
+  console.log('[Completion] ====== FINAL PROMPT TO LLM ======')
+  console.log('[Completion] Total messages:', messages.length)
+  console.log('[Completion] Model:', thread.model?.id)
+  console.log('[Completion] Tools available:', usableTools.length)
+  
+  messages.forEach((msg, idx) => {
+    const role = typeof msg === 'object' && 'role' in msg ? msg.role : 'unknown'
+    const content = typeof msg === 'object' && 'content' in msg ? msg.content : ''
+    const contentStr = typeof content === 'string' ? content : JSON.stringify(content)
+    const preview = contentStr.substring(0, 200).replace(/\n/g, ' ')
+    
+    console.log(`[Completion] Message ${idx + 1}/${messages.length} [${role}]:`)
+    if (contentStr.length <= 200) {
+      console.log(`  ${contentStr}`)
+    } else {
+      console.log(`  ${preview}... (${contentStr.length} chars total)`)
+    }
+    
+    // Highlight tool messages (RAG context)
+    if (role === 'tool') {
+      console.log('  ⚡ [TOOL RESULT - RAG Context]')
+    }
+  })
+  
+  console.log('[Completion] ====== END FINAL PROMPT ======')
+
   const completion = engine
     ? await engine.chat(
         {

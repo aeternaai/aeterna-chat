@@ -86,6 +86,12 @@ const SettingsMenu = () => {
       isEnabled: PlatformFeatures[PlatformFeature.FILE_ATTACHMENTS],
     },
     {
+      title: 'common:langchainRag',
+      route: route.settings.langchain_rag,
+      hasSubMenu: false,
+      isEnabled: true,
+    },
+    {
       title: 'common:interface',
       route: route.settings.interface,
       hasSubMenu: false,

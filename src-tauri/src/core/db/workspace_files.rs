@@ -48,12 +48,16 @@ pub async fn add_file(workspace_id: &str, file: &Value) -> DbResult<Value> {
         .unwrap_or("ready");
     
     let metadata = serde_json::to_string(&file)?;
+    
+    let rag_status = file.get("rag_status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("pending");
 
     sqlx::query(
         r#"
         INSERT INTO workspace_files 
-        (id, workspace_id, file_path, name, extension, size, added_at, updated_at, is_valid, status, metadata)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        (id, workspace_id, file_path, name, extension, size, added_at, updated_at, is_valid, status, metadata, rag_status)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
         "#,
     )
     .bind(id)
@@ -67,6 +71,7 @@ pub async fn add_file(workspace_id: &str, file: &Value) -> DbResult<Value> {
     .bind(is_valid)
     .bind(status)
     .bind(&metadata)
+    .bind(rag_status)
     .execute(pool)
     .await?;
 
@@ -224,3 +229,65 @@ pub async fn count_files(workspace_id: &str) -> DbResult<i64> {
 
     Ok(count)
 }
+
+/// Update RAG status for a workspace file
+pub async fn update_rag_status(
+    file_id: &str,
+    status: &str,
+    chunks: Option<i64>,
+    indexed_at: Option<i64>,
+    error: Option<&str>,
+) -> DbResult<()> {
+    let pool = get_pool()?;
+    let updated_at = chrono::Utc::now().timestamp();
+    
+    let result = sqlx::query(
+        r#"
+        UPDATE workspace_files
+        SET rag_status = ?1, rag_chunks = COALESCE(?2, rag_chunks), 
+            rag_indexed_at = COALESCE(?3, rag_indexed_at), rag_error = ?4, updated_at = ?5
+        WHERE id = ?6
+        "#,
+    )
+    .bind(status)
+    .bind(chunks)
+    .bind(indexed_at)
+    .bind(error)
+    .bind(updated_at)
+    .bind(file_id)
+    .execute(pool)
+    .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(DbError::NotFound(format!("File {} not found", file_id)));
+    }
+
+    Ok(())
+}
+
+/// Get RAG status for a workspace file
+pub async fn get_rag_status(file_id: &str) -> DbResult<Option<(String, i64, Option<i64>, Option<String>)>> {
+    let pool = get_pool()?;
+    
+    let row = sqlx::query(
+        r#"
+        SELECT rag_status, rag_chunks, rag_indexed_at, rag_error
+        FROM workspace_files WHERE id = ?1
+        "#,
+    )
+    .bind(file_id)
+    .fetch_optional(pool)
+    .await?;
+
+    match row {
+        Some(row) => {
+            let status: String = row.get(0);
+            let chunks: i64 = row.get(1);
+            let indexed_at: Option<i64> = row.get(2);
+            let error: Option<String> = row.get(3);
+            Ok(Some((status, chunks, indexed_at, error)))
+        }
+        None => Ok(None),
+    }
+}
+
