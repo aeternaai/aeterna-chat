@@ -51,38 +51,41 @@ export default class RagExtension extends RAGExtension {
   }
 
   private setupWorkspaceFileListener(): void {
+    // DISABLED: Default RAG workspace file listener to avoid interference with LangChain RAG
+    console.log('[RAG] Workspace file listener disabled - using LangChain RAG extension only')
+    
     // Listen for new workspace files added
-    events.on(WorkspaceEvent.OnFileAdded, async (file: WorkspaceFile) => {
-      if (!this.config.enabled) {
-        console.log('[RAG] RAG disabled, skipping file indexing')
-        return
-      }
+    // events.on(WorkspaceEvent.OnFileAdded, async (file: WorkspaceFile) => {
+    //   if (!this.config.enabled) {
+    //     console.log('[RAG] RAG disabled, skipping file indexing')
+    //     return
+    //   }
 
-      // Skip if already ingesting this file
-      if (this.ingestionInProgress.has(file.id)) {
-        console.log('[RAG] Ingestion already in progress for file:', file.id)
-        return
-      }
+    //   // Skip if already ingesting this file
+    //   if (this.ingestionInProgress.has(file.id)) {
+    //     console.log('[RAG] Ingestion already in progress for file:', file.id)
+    //     return
+    //   }
 
-      console.log('[RAG] Workspace file added, starting indexing:', file.id, file.name)
+    //   console.log('[RAG] Workspace file added, starting indexing:', file.id, file.name)
 
-      // Mark as in-progress
-      this.ingestionInProgress.add(file.id)
+    //   // Mark as in-progress
+    //   this.ingestionInProgress.add(file.id)
 
-      try {
-        // Ingest the file directly in the extension
-        // This will handle parsing, chunking, embedding, and storage
-        this.ingestWorkspaceFile(file.workspace_id, file.id, file.file_path).catch((err) => {
-          console.error('[RAG] Error in async workspace file ingestion:', err)
-        }).finally(() => {
-          // Mark as complete
-          this.ingestionInProgress.delete(file.id)
-        })
-      } catch (err) {
-        console.error('[RAG] Failed to start workspace file indexing:', err)
-        this.ingestionInProgress.delete(file.id)
-      }
-    })
+    //   try {
+    //     // Ingest the file directly in the extension
+    //     // This will handle parsing, chunking, embedding, and storage
+    //     this.ingestWorkspaceFile(file.workspace_id, file.id, file.file_path).catch((err) => {
+    //       console.error('[RAG] Error in async workspace file ingestion:', err)
+    //     }).finally(() => {
+    //       // Mark as complete
+    //       this.ingestionInProgress.delete(file.id)
+    //     })
+    //   } catch (err) {
+    //     console.error('[RAG] Failed to start workspace file indexing:', err)
+    //     this.ingestionInProgress.delete(file.id)
+    //   }
+    // })
 
     // Listen for workspace file deletions - clean up vector data if needed
     events.on(WorkspaceEvent.OnFileRemoved, async (data: any) => {

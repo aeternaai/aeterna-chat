@@ -43,7 +43,7 @@ try:
     )
     from langchain_huggingface import HuggingFaceEmbeddings
     from langchain_community.vectorstores import Qdrant
-    from qdrant_client import QdrantClient
+    from qdrant_client import QdrantClient, models
     from qdrant_client.models import Distance, VectorParams
     LANGCHAIN_AVAILABLE = True
 except ImportError as e:
@@ -84,7 +84,7 @@ class LangChainService:
             "chunk_size": 512,
             "chunk_overlap": 64,
             "top_k": 3,
-            "score_threshold": 0.0,
+            "score_threshold": 0.5,
             "qdrant_path": None,  # Set during initialization
             "llm_server_url": "http://127.0.0.1:8080/v1",  # llama.cpp server
             "llm_api_key": "not-needed",
@@ -210,7 +210,7 @@ class LangChainService:
     
     def _ensure_collection(self, collection_name: str, vector_size: int = 384):
         """
-        Ensure a collection exists in Qdrant.
+        Ensure a collection exists in Qdrant with payload indexes.
         
         Args:
             collection_name: Name of the collection
@@ -227,6 +227,18 @@ class LangChainService:
                     distance=Distance.COSINE,
                 ),
             )
+            
+            # Create payload indexes for efficient filtering
+            try:
+                logger.info(f"Creating payload index on 'workspace_id' for collection: {collection_name}")
+                self.qdrant_client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name="workspace_id",
+                    field_schema="keyword"
+                )
+                logger.info("Payload index created successfully")
+            except Exception as e:
+                logger.warning(f"Failed to create payload index: {e}")
     
     def health(self) -> Dict[str, Any]:
         """
@@ -372,6 +384,9 @@ class LangChainService:
         collection = params.get("collection", "default")
         k = params.get("k", self.config["top_k"])
         score_threshold = params.get("score_threshold", self.config["score_threshold"])
+        # Ensure score_threshold is a valid float, default to 0.0 if None
+        if score_threshold is None:
+            score_threshold = 0.5
         filter_dict = params.get("filter")
         stream = params.get("stream", False)
         
@@ -411,20 +426,79 @@ class LangChainService:
         
         logger.info(f"Performing similarity search...")
         
-        # Perform similarity search
-        results = vectorstore.similarity_search_with_score(
-            query_text,
-            k=k,
-            filter=filter_dict,
-        )
+        # Build Qdrant filter using proper model classes (like Gemini example)
+        search_filter = None
+        if filter_dict:
+            logger.info(f"Building Qdrant filter from: {filter_dict}")
+            must_conditions = []
+            
+            # Handle workspace_id filter
+            if "workspace_id" in filter_dict:
+                must_conditions.append(
+                    models.FieldCondition(
+                        key="workspace_id",
+                        match=models.MatchValue(value=filter_dict["workspace_id"])
+                    )
+                )
+            
+            # Handle file_id filter (can be single value or list)
+            if "file_id" in filter_dict:
+                file_ids = filter_dict["file_id"]
+                if isinstance(file_ids, list):
+                    for file_id in file_ids:
+                        must_conditions.append(
+                            models.FieldCondition(
+                                key="file_id",
+                                match=models.MatchValue(value=file_id)
+                            )
+                        )
+                else:
+                    must_conditions.append(
+                        models.FieldCondition(
+                            key="file_id",
+                            match=models.MatchValue(value=file_ids)
+                        )
+                    )
+            
+            if must_conditions:
+                search_filter = models.Filter(must=must_conditions)
+                logger.info(f"Created Qdrant filter with {len(must_conditions)} conditions")
+        
+        # Generate query embedding
+        query_embedding = self.embeddings.embed_query(query_text)
+        logger.info(f"Generated query embedding with dimension: {len(query_embedding)}")
+        
+        # Use the new query_points API (qdrant-client 1.9.0+)
+        search_results = self.qdrant_client.query_points(
+            collection_name=collection,
+            query=query_embedding,  # Note: 'query' not 'query_vector'
+            query_filter=search_filter,
+            limit=k,
+            with_payload=True,
+        ).points
+        
+        logger.info(f"Query returned {len(search_results)} results")
+        
+        # Convert Qdrant results to LangChain format (doc, score)
+        results = []
+        for point in search_results:
+            # Reconstruct Document from payload
+            from langchain_core.documents import Document
+            doc = Document(
+                page_content=point.payload.get("page_content", ""),
+                metadata=point.payload.get("metadata", {})
+            )
+            # Qdrant score is similarity (higher is better), default to 0.0 if None
+            score = point.score if point.score is not None else 0.0
+            results.append((doc, score))
         
         logger.info(f"Similarity search returned {len(results)} results")
         logger.info(f"Raw results scores: {[score for _, score in results]}")
         
-        # Filter by score threshold
+        # Filter by score threshold (safely handle None scores)
         filtered_results = [
             (doc, score) for doc, score in results
-            if score >= score_threshold
+            if score is not None and score >= score_threshold
         ]
         
         logger.info(f"After threshold filter ({score_threshold}): {len(filtered_results)} results")
@@ -432,15 +506,17 @@ class LangChainService:
         
         logger.info(f"Retrieved {len(filtered_results)} relevant documents")
         
-        # Format sources
+        # Format sources - must match Rust SourceDocument schema
         sources = []
         context_parts = []
         
         for doc, score in filtered_results:
             source = {
-                "content": doc.page_content,
+                "file": doc.metadata.get("source_file", "unknown"),
+                "chunk": doc.page_content,
+                "score": float(score),  # Ensure it's a float
+                "chunk_index": int(doc.metadata.get("chunk_index", 0)),
                 "metadata": doc.metadata,
-                "score": score,
             }
             sources.append(source)
             context_parts.append(doc.page_content)

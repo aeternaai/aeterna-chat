@@ -170,7 +170,8 @@ export default class LangChainRagExtension extends RAGExtension {
       }
 
       console.log('[LangChain RAG] 📂 Workspace file added, starting indexing:', file.id, file.name)
-      console.log('[LangChain RAG] 🗂️  Collection will be: thread_' + file.workspace_id)
+      console.log('[LangChain RAG] 🗂️  Collection: enterprise_knowledge (global)')
+      console.log('[LangChain RAG] 🏢 Workspace ID:', file.workspace_id)
 
       // Mark as in-progress
       this.ingestionInProgress.add(file.id)
@@ -201,12 +202,22 @@ export default class LangChainRagExtension extends RAGExtension {
     filePath: string
   ): Promise<void> {
     try {
-      const threadId = workspaceId  // Use workspace_id as collection key
-      const collection = `thread_${threadId}`
+      const collection = this.getCollectionName()
 
-      console.log(`[LangChain RAG] Ingesting file ${fileId} to collection ${collection}`)
+      console.log(`[LangChain RAG] Ingesting workspace file ${fileId} to global collection ${collection}`)
+      console.log(`[LangChain RAG] Workspace ID in metadata: ${workspaceId}`)
 
-      // Ingest to LangChain
+      // Fetch workspace info to get the name
+      let workspaceName = 'Unknown'
+      try {
+        const workspace = await invoke<any>('get_workspace', { workspaceId })
+        workspaceName = workspace?.name || workspaceId
+        console.log(`[LangChain RAG] Workspace name: ${workspaceName}`)
+      } catch (err) {
+        console.warn(`[LangChain RAG] Failed to fetch workspace name:`, err)
+      }
+
+      // Ingest to LangChain with workspace_id and workspace_name in metadata for filtering
       const ingestParams: IngestParams = {
         file_path: filePath,
         collection: collection,
@@ -214,6 +225,7 @@ export default class LangChainRagExtension extends RAGExtension {
         chunk_overlap: this.config.chunk_overlap,
         metadata: {
           workspace_id: workspaceId,
+          workspace_name: workspaceName,
           file_id: fileId,
         },
       }
@@ -288,87 +300,18 @@ export default class LangChainRagExtension extends RAGExtension {
   }
 
   /**
-   * Get collection name for a thread
+   * Get the global collection name
    */
-  private getCollectionName(threadId: string): string {
-    return `thread_${threadId}`
-  }
-
-  /**
-   * Ingest attachments into the RAG system
-   */
-  async ingestAttachments(
-    threadId: string,
-    files: AttachmentInput[]
-  ): Promise<{ filesProcessed: number; chunksInserted: number; files: AttachmentFileInfo[] }> {
-    if (!this.config.enabled) {
-      console.log('[LangChain RAG] Extension disabled, skipping ingestion')
-      return { filesProcessed: 0, chunksInserted: 0, files: [] }
-    }
-
-    await this.ensureServiceRunning()
-
-    const collection = this.getCollectionName(threadId)
-    const processedFiles: AttachmentFileInfo[] = []
-    let totalChunks = 0
-
-    for (const file of files) {
-      if (!file.path) {
-        console.warn('[LangChain RAG] Skipping file without path:', file)
-        continue
-      }
-
-      try {
-        console.log('[LangChain RAG] Ingesting file:', file.path)
-
-        const params: IngestParams = {
-          file_path: file.path,
-          collection,
-          chunk_size: this.config.chunk_size,
-          chunk_overlap: this.config.chunk_overlap,
-          metadata: {
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            thread_id: threadId,
-          },
-        }
-
-        const result = await invoke<IngestResponse>('plugin:langchain|ingest_document', {
-          params,
-        })
-
-        console.log('[LangChain RAG] Ingestion complete:', result.chunks_count, 'chunks')
-
-        totalChunks += result.chunks_count
-
-        processedFiles.push({
-          id: result.document_ids[0] || file.path,  // Use first doc ID or path as fallback
-          name: file.name || result.source_file,
-          path: file.path,
-          type: file.type,
-          size: file.size || 0,
-          chunk_count: result.chunks_count,
-        })
-
-      } catch (error) {
-        console.error('[LangChain RAG] Failed to ingest file:', file.path, error)
-        throw error
-      }
-    }
-
-    return {
-      filesProcessed: processedFiles.length,
-      chunksInserted: totalChunks,
-      files: processedFiles,
-    }
+  private getCollectionName(): string {
+    return 'enterprise_knowledge'
   }
 
   /**
    * Retrieve relevant documents with threshold filtering (for pre-retrieval)
    * Returns only documents above the relevance threshold
+   * Supports workspace-scoped search via workspace_id filter
    */
-  async retrieveDocuments(threadId: string, query: string, threshold: number = 0.5): Promise<{
+  async retrieveDocuments(query: string, threshold: number = 0.5, workspaceId?: string): Promise<{
     sources: Array<{ content: string; metadata: Record<string, unknown>; score: number }>
     num_sources: number
   }> {
@@ -378,19 +321,29 @@ export default class LangChainRagExtension extends RAGExtension {
     }
 
     await this.ensureServiceRunning()
-    const collection = this.getCollectionName(threadId)
+    const collection = this.getCollectionName()
 
     console.log('[LangChain RAG] ====== PRE-RETRIEVAL MODE ======')
-    console.log('[LangChain RAG] Thread ID:', threadId)
+    console.log('[LangChain RAG] Workspace ID:', workspaceId || 'none (global search)')
     console.log('[LangChain RAG] Collection:', collection)
     console.log('[LangChain RAG] Query:', query)
     console.log('[LangChain RAG] Threshold:', threshold)
 
     try {
+      // Build filter for workspace-scoped search
+      const filter = workspaceId ? { workspace_id: workspaceId } : undefined
+      
+      if (filter) {
+        console.log('[LangChain RAG] Applying filter:', JSON.stringify(filter))
+      } else {
+        console.log('[LangChain RAG] No filter - searching all documents')
+      }
+
       const params: QueryParams = {
         query,
         collection,
         k: this.config.retrieval_limit,
+        filter,
       }
 
       const result = await invoke<QueryResponse>('plugin:langchain|query_rag', { params })
@@ -428,23 +381,33 @@ export default class LangChainRagExtension extends RAGExtension {
   /**
    * Query the RAG system (returns a tool result for MCP compatibility)
    */
-  private async queryRag(threadId: string, query: string, fileIds?: string[]): Promise<QueryResponse> {
+  private async queryRag(query: string, fileIds?: string[], workspaceId?: string): Promise<QueryResponse> {
     await this.ensureServiceRunning()
 
-    const collection = this.getCollectionName(threadId)
+    const collection = this.getCollectionName()
 
     console.log('[LangChain RAG] Starting query...')
-    console.log('[LangChain RAG] Thread ID:', threadId)
+    console.log('[LangChain RAG] Workspace ID:', workspaceId || 'none (global search)')
     console.log('[LangChain RAG] Collection name:', collection)
     console.log('[LangChain RAG] Query text:', query)
     console.log('[LangChain RAG] Retrieval limit (k):', this.config.retrieval_limit)
     console.log('[LangChain RAG] File IDs filter:', fileIds || 'none')
 
+    // Build filter combining workspace_id and file_ids if provided
+    let filter: Record<string, unknown> | undefined
+    if (workspaceId && fileIds) {
+      filter = { workspace_id: workspaceId, file_id: fileIds }
+    } else if (workspaceId) {
+      filter = { workspace_id: workspaceId }
+    } else if (fileIds) {
+      filter = { file_id: fileIds }
+    }
+
     const params: QueryParams = {
       query,
       collection,
       k: this.config.retrieval_limit,
-      filter: fileIds ? { file_id: fileIds } : undefined,
+      filter,
     }
 
     console.log('[LangChain RAG] Sending query params to Python service...')
@@ -482,13 +445,13 @@ export default class LangChainRagExtension extends RAGExtension {
     
     const tool: MCPTool = {
       name: 'retrieve_langchain',
-      description: 'ALWAYS search the user\'s workspace documents first before answering any question. This tool retrieves relevant context from ingested documents and knowledge base using LangChain vector search. Use this for ANY query that could benefit from workspace-specific information, documentation, or context. Returns an AI-generated answer with source citations.',
+      description: 'ALWAYS search the workspace documents first before answering any question. This tool retrieves relevant context from ingested workspace documents and knowledge base using LangChain vector search. Use this for ANY query that could benefit from workspace-specific information, documentation, or context. Returns an AI-generated answer with source citations.',
       inputSchema: {
         type: 'object',
         properties: {
-          thread_id: {
+          workspace_id: {
             type: 'string',
-            description: 'The thread ID to search within',
+            description: 'Optional workspace ID to scope the search to a specific workspace',
           },
           query: {
             type: 'string',
@@ -500,7 +463,7 @@ export default class LangChainRagExtension extends RAGExtension {
             description: 'Optional: Filter by specific file IDs',
           },
         },
-        required: ['thread_id', 'query'],
+        required: ['query'],
       },
       server: 'langchain-rag',
     }
@@ -531,27 +494,29 @@ export default class LangChainRagExtension extends RAGExtension {
 
     if (toolName === 'retrieve_langchain') {
       console.log('[LangChain RAG] ✓ Tool name matches - proceeding with retrieve_langchain')
-      const threadId = args.thread_id as string
+      const workspaceId = args.workspace_id as string
       const query = args.query as string
       const fileIds = args.file_ids as string[] | undefined
 
       console.log('[LangChain RAG] Extracted args:')
-      console.log('[LangChain RAG]   threadId:', threadId)
+      console.log('[LangChain RAG]   workspaceId:', workspaceId || 'none (global)')
       console.log('[LangChain RAG]   query:', query)
       console.log('[LangChain RAG]   fileIds:', fileIds)
-      console.log('[LangChain RAG]   🗂️  Collection will be: thread_' + threadId)
 
-      if (!threadId || !query) {
-        console.error('[LangChain RAG] Missing required parameters')
+      if (!query) {
+        console.error('[LangChain RAG] Missing required parameter: query')
         return {
-          error: 'Missing required parameters: thread_id and query',
-          content: [{ type: 'text', text: 'Missing required parameters: thread_id and query' }],
+          error: 'Missing required parameter: query',
+          content: [{ type: 'text', text: 'Missing required parameter: query' }],
         }
       }
 
+      console.log('[LangChain RAG]   🗂️  Collection: enterprise_knowledge')
+      console.log('[LangChain RAG]   🔍  Workspace filter:', workspaceId || 'none (global)')
+
       try {
         console.log('[LangChain RAG] Calling queryRag...')
-        const result = await this.queryRag(threadId, query, fileIds)
+        const result = await this.queryRag(query, fileIds, workspaceId)
 
         console.log('[LangChain RAG] queryRag returned successfully')
         console.log('[LangChain RAG] Result has', result.sources.length, 'sources')
